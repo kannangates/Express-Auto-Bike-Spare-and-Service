@@ -1,0 +1,11 @@
+User-agent: *
+Disallow: /api/
+Disallow: /admin/
+Disallow: /login
+Disallow: /auth/
+Disallow: /unauthorized
+Disallow: /approval-pending
+
+Allow: /
+
+Sitemap: https://yourdomain.com/sitemap.xml

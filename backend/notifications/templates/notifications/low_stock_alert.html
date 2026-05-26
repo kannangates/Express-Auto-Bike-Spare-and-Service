@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Low Stock Alert - {{ company_name }}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+
+    .container {
+      background-color: white;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #f59e0b;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: #1f2937;
+      margin-bottom: 10px;
+    }
+
+    .alert-badge {
+      background-color: #fef3c7;
+      color: #92400e;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .content {
+      margin-bottom: 30px;
+    }
+
+    .greeting {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #1f2937;
+    }
+
+    .message {
+      font-size: 16px;
+      margin-bottom: 25px;
+      line-height: 1.7;
+    }
+
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background-color: #f9fafb;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .items-table th {
+      background-color: #f3f4f6;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .items-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .items-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .stock-critical {
+      color: #dc2626;
+      font-weight: 600;
+    }
+
+    .stock-low {
+      color: #f59e0b;
+      font-weight: 600;
+    }
+
+    .action-button {
+      display: inline-block;
+      background-color: #3b82f6;
+      color: white;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .action-button:hover {
+      background-color: #2563eb;
+    }
+
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      text-align: center;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .footer a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+
+      .container {
+        padding: 20px;
+      }
+
+      .items-table {
+        font-size: 14px;
+      }
+
+      .items-table th,
+      .items-table td {
+        padding: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">{{ company_name }}</div>
+      <div class="alert-badge">⚠️ Low Stock Alert</div>
+    </div>
+
+    <div class="content">
+      <div class="greeting">
+        Hello {{ recipient.get_full_name|default:recipient.email }},
+      </div>
+
+      <div class="message">
+        <strong>{{ notification.title }}</strong>
+      </div>
+
+      <div class="message">
+        {{ notification.message }}
+      </div>
+
+      {% if notification_data.items %}
+      <div class="message">
+        <strong>Items requiring attention:</strong>
+      </div>
+
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>Item Name</th>
+            <th>Barcode</th>
+            <th>Category</th>
+            <th>Current Stock</th>
+            <th>Min Level</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in notification_data.items %}
+          <tr>
+            <td><strong>{{ item.name }}</strong></td>
+            <td>{{ item.barcode }}</td>
+            <td>{{ item.category|default:"Uncategorized" }}</td>
+            <td>
+              {% if item.current_stock == 0 %}
+              <span class="stock-critical">{{ item.current_stock }}</span>
+              {% else %}
+              <span class="stock-low">{{ item.current_stock }}</span>
+              {% endif %}
+            </td>
+            <td>{{ item.min_stock }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if notification_data.low_stock_count > notification_data.items|length %}
+      <div class="message">
+        <em>... and {{ notification_data.low_stock_count|add:"-"|add:notification_data.items|length }} more items</em>
+      </div>
+      {% endif %}
+      {% endif %}
+
+      <div class="message">
+        Please review your inventory and restock these items as soon as possible to avoid stockouts.
+      </div>
+
+      <a href="{{ base_url }}/inventory?filter=low_stock" class="action-button">
+        View Inventory →
+      </a>
+    </div>
+
+    {% include "notifications/_whatsapp_button.html" with whatsapp_message="Hi! I need to discuss low stock items
+    urgently." %}
+
+    <div class="footer">
+      <p>
+        This is an automated notification from {{ company_name }}.<br>
+        If you have questions, please contact us at
+        <a href="mailto:{{ support_email }}">{{ support_email }}</a>
+      </p>
+      <p>
+        <a href="{{ base_url }}/notifications/preferences">Manage notification preferences</a>
+      </p>
+      <p>&copy; {{ current_year }} {{ company_name }}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

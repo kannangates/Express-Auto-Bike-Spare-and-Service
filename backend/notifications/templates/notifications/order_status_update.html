@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Status Update - {{ company_name }}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+
+    .container {
+      background-color: white;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #10b981;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: #1f2937;
+      margin-bottom: 10px;
+    }
+
+    .status-badge {
+      background-color: #d1fae5;
+      color: #065f46;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .status-badge.pending {
+      background-color: #fef3c7;
+      color: #92400e;
+    }
+
+    .status-badge.processing {
+      background-color: #dbeafe;
+      color: #1e40af;
+    }
+
+    .status-badge.shipped {
+      background-color: #e0e7ff;
+      color: #3730a3;
+    }
+
+    .status-badge.delivered {
+      background-color: #d1fae5;
+      color: #065f46;
+    }
+
+    .content {
+      margin-bottom: 30px;
+    }
+
+    .greeting {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #1f2937;
+    }
+
+    .message {
+      font-size: 16px;
+      margin-bottom: 25px;
+      line-height: 1.7;
+    }
+
+    .order-details {
+      background-color: #f9fafb;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+
+    .order-details h3 {
+      margin-top: 0;
+      color: #374151;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .detail-row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .detail-label {
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .detail-value {
+      color: #6b7280;
+    }
+
+    .status-timeline {
+      margin: 20px 0;
+    }
+
+    .timeline-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .timeline-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 15px;
+      flex-shrink: 0;
+    }
+
+    .timeline-dot.completed {
+      background-color: #10b981;
+    }
+
+    .timeline-dot.current {
+      background-color: #3b82f6;
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+    }
+
+    .timeline-dot.pending {
+      background-color: #d1d5db;
+    }
+
+    .timeline-text {
+      font-size: 14px;
+    }
+
+    .timeline-text.current {
+      font-weight: 600;
+      color: #3b82f6;
+    }
+
+    .action-button {
+      display: inline-block;
+      background-color: #3b82f6;
+      color: white;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .action-button:hover {
+      background-color: #2563eb;
+    }
+
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      text-align: center;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .footer a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+
+      .container {
+        padding: 20px;
+      }
+
+      .detail-row {
+        flex-direction: column;
+      }
+
+      .detail-label {
+        margin-bottom: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">{{ company_name }}</div>
+      <div class="status-badge {{ notification_data.new_status|lower }}">
+        📦 Order {{ notification_data.new_status|title }}
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="greeting">
+        Hello {{ recipient.get_full_name|default:recipient.email }},
+      </div>
+
+      <div class="message">
+        <strong>{{ notification.title }}</strong>
+      </div>
+
+      <div class="message">
+        {{ notification.message }}
+      </div>
+
+      {% if notification_data %}
+      <div class="order-details">
+        <h3>Order Details</h3>
+        <div class="detail-row">
+          <span class="detail-label">Order Number:</span>
+          <span class="detail-value">#{{ notification_data.order_number }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Previous Status:</span>
+          <span class="detail-value">{{ notification_data.old_status|title }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Current Status:</span>
+          <span class="detail-value"><strong>{{ notification_data.new_status|title }}</strong></span>
+        </div>
+      </div>
+
+      <div class="status-timeline">
+        <h3>Order Progress</h3>
+        <div class="timeline-item">
+          <div class="timeline-dot completed"></div>
+          <div class="timeline-text">Order Placed</div>
+        </div>
+        <div class="timeline-item">
+          <div
+            class="timeline-dot {% if notification_data.new_status == 'CONFIRMED' or notification_data.new_status == 'PROCESSING' or notification_data.new_status == 'SHIPPED' or notification_data.new_status == 'DELIVERED' %}completed{% elif notification_data.new_status == 'PENDING' %}current{% else %}pending{% endif %}">
+          </div>
+          <div class="timeline-text {% if notification_data.new_status == 'CONFIRMED' %}current{% endif %}">Order
+            Confirmed</div>
+        </div>
+        <div class="timeline-item">
+          <div
+            class="timeline-dot {% if notification_data.new_status == 'PROCESSING' or notification_data.new_status == 'SHIPPED' or notification_data.new_status == 'DELIVERED' %}completed{% elif notification_data.new_status == 'CONFIRMED' %}current{% else %}pending{% endif %}">
+          </div>
+          <div class="timeline-text {% if notification_data.new_status == 'PROCESSING' %}current{% endif %}">Processing
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div
+            class="timeline-dot {% if notification_data.new_status == 'SHIPPED' or notification_data.new_status == 'DELIVERED' %}completed{% elif notification_data.new_status == 'PROCESSING' %}current{% else %}pending{% endif %}">
+          </div>
+          <div class="timeline-text {% if notification_data.new_status == 'SHIPPED' %}current{% endif %}">Shipped</div>
+        </div>
+        <div class="timeline-item">
+          <div
+            class="timeline-dot {% if notification_data.new_status == 'DELIVERED' %}completed current{% else %}pending{% endif %}">
+          </div>
+          <div class="timeline-text {% if notification_data.new_status == 'DELIVERED' %}current{% endif %}">Delivered
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="message">
+        {% if notification_data.new_status == 'SHIPPED' %}
+        Your order is on its way! You should receive it within the next few business days.
+        {% elif notification_data.new_status == 'DELIVERED' %}
+        Your order has been delivered! We hope you're satisfied with your purchase.
+        {% elif notification_data.new_status == 'PROCESSING' %}
+        Your order is being prepared for shipment. We'll notify you when it ships.
+        {% else %}
+        Thank you for your order. We'll keep you updated on its progress.
+        {% endif %}
+      </div>
+
+      <a href="{{ base_url }}/orders/{{ notification_data.order_id }}" class="action-button">
+        View Order Details →
+      </a>
+    </div>
+
+    {% include "notifications/_whatsapp_button.html" with whatsapp_message="Hi! I have a question about my order
+    #"|add:notification_data.order_number %}
+
+    <div class="footer">
+      <p>
+        This is an automated notification from {{ company_name }}.<br>
+        If you have questions about your order, please contact us at
+        <a href="mailto:{{ support_email }}">{{ support_email }}</a>
+      </p>
+      <p>
+        <a href="{{ base_url }}/notifications/preferences">Manage notification preferences</a>
+      </p>
+      <p>&copy; {{ current_year }} {{ company_name }}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

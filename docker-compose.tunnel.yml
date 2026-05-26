@@ -1,0 +1,100 @@
+# Cloudflare Tunnel Override (Zero-Budget Deployment)
+# Use: docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
+# Cloudflared tunnel starts automatically!
+
+version: '3.8'
+
+services:
+  # Cloudflare Tunnel Service
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: express-auto-cloudflared
+    command: >
+      sh -c "if [ -n \"${CLOUDFLARE_TUNNEL_NAME:-}\" ]; then
+        echo 'Using permanent tunnel: ${CLOUDFLARE_TUNNEL_NAME}';
+        cloudflared tunnel --no-autoupdate run ${CLOUDFLARE_TUNNEL_NAME};
+      else
+        echo 'Using temporary tunnel';
+        cloudflared tunnel --no-autoupdate --url http://frontend:3000;
+      fi"
+    volumes:
+      - ~/.cloudflared:/root/.cloudflared:ro
+    depends_on:
+      - frontend
+    networks:
+      - express-auto-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    environment:
+      - DEBUG=0
+      - ALLOWED_HOSTS=${TUNNEL_BACKEND_URL},localhost,127.0.0.1,backend
+      - CORS_ALLOWED_ORIGINS=${TUNNEL_FRONTEND_URL},http://localhost:3000
+      - SECURE_SSL_REDIRECT=0  # Cloudflare handles SSL
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+    command: >
+      sh -c "python manage.py migrate &&
+        python manage.py collectstatic --noinput &&
+        gunicorn express_auto_bike.wsgi:application --bind 0.0.0.0:8000 --workers $(python -c 'import multiprocessing; print(multiprocessing.cpu_count() * 2 + 1)')"
+    restart: unless-stopped
+
+  frontend:
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${TUNNEL_BACKEND_URL}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    command: npm start
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+  # Optional: Celery for background tasks
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: express-auto-celery-worker
+    env_file:
+      - .env
+    environment:
+      - DEBUG=0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - express-auto-network
+    command: celery -A express_auto_bike worker -l info --concurrency=2
+    restart: unless-stopped
+
+  # Celery Beat Scheduler (required for low-stock alerts, approval reminders, etc.)
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: express-auto-celery-beat
+    env_file:
+      - .env
+    environment:
+      - DEBUG=0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - express-auto-network
+    command: celery -A express_auto_bike beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    restart: unless-stopped

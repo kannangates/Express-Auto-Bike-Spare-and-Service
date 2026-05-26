@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Return Processed - {{ company_name }}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+
+    .container {
+      background-color: white;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #10b981;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: #1f2937;
+      margin-bottom: 10px;
+    }
+
+    .status-badge {
+      background-color: #d1fae5;
+      color: #065f46;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .content {
+      margin-bottom: 30px;
+    }
+
+    .greeting {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #1f2937;
+    }
+
+    .message {
+      font-size: 16px;
+      margin-bottom: 25px;
+      line-height: 1.7;
+    }
+
+    .return-details {
+      background-color: #f9fafb;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+
+    .return-details h3 {
+      margin-top: 0;
+      color: #374151;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .detail-row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .detail-label {
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .detail-value {
+      color: #6b7280;
+    }
+
+    .credit-highlight {
+      background-color: #ecfdf5;
+      border: 1px solid #10b981;
+      border-radius: 6px;
+      padding: 15px;
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .credit-amount {
+      font-size: 24px;
+      font-weight: bold;
+      color: #10b981;
+      margin-bottom: 5px;
+    }
+
+    .credit-text {
+      color: #065f46;
+      font-size: 14px;
+    }
+
+    .action-button {
+      display: inline-block;
+      background-color: #3b82f6;
+      color: white;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .action-button:hover {
+      background-color: #2563eb;
+    }
+
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      text-align: center;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .footer a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+
+      .container {
+        padding: 20px;
+      }
+
+      .detail-row {
+        flex-direction: column;
+      }
+
+      .detail-label {
+        margin-bottom: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">{{ company_name }}</div>
+      <div class="status-badge">
+        ↩️ Return Processed
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="greeting">
+        Hello {{ recipient.get_full_name|default:recipient.email }},
+      </div>
+
+      <div class="message">
+        <strong>{{ notification.title }}</strong>
+      </div>
+
+      <div class="message">
+        {{ notification.message }}
+      </div>
+
+      {% if notification_data %}
+      <div class="return-details">
+        <h3>Return Details</h3>
+        <div class="detail-row">
+          <span class="detail-label">Return Number:</span>
+          <span class="detail-value">#{{ notification_data.return_number }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Status:</span>
+          <span class="detail-value"><strong>{{ notification_data.status|title }}</strong></span>
+        </div>
+        {% if notification_data.credit_amount %}
+        <div class="detail-row">
+          <span class="detail-label">Credit Amount:</span>
+          <span class="detail-value">${{ notification_data.credit_amount }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if notification_data.credit_amount and notification_data.credit_amount != "0.00" %}
+      <div class="credit-highlight">
+        <div class="credit-amount">${{ notification_data.credit_amount }}</div>
+        <div class="credit-text">has been added to your account credit balance</div>
+      </div>
+      {% endif %}
+      {% endif %}
+
+      <div class="message">
+        {% if notification_data.status == 'PROCESSED' %}
+        Your return has been successfully processed.
+        {% if notification_data.credit_amount and notification_data.credit_amount != "0.00" %}
+        The credit amount has been added to your account and can be used for future purchases.
+        {% endif %}
+        {% elif notification_data.status == 'APPROVED' %}
+        Your return has been approved and will be processed soon. We'll notify you once it's complete.
+        {% else %}
+        Thank you for initiating this return. We'll keep you updated on its progress.
+        {% endif %}
+      </div>
+
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="{{ base_url }}/returns/{{ notification_data.return_id }}" class="action-button">
+          View Return Details →
+        </a>
+        {% if notification_data.credit_amount and notification_data.credit_amount != "0.00" %}
+        <a href="{{ base_url }}/account/credits" class="action-button" style="background-color: #10b981;">
+          View Credit Balance →
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {% include "notifications/_whatsapp_button.html" with whatsapp_message="Hi! I have a question about my return
+    #"|add:notification_data.return_number %}
+
+    <div class="footer">
+      <p>
+        This is an automated notification from {{ company_name }}.<br>
+        If you have questions about your return, please contact us at
+        <a href="mailto:{{ support_email }}">{{ support_email }}</a>
+      </p>
+      <p>
+        <a href="{{ base_url }}/notifications/preferences">Manage notification preferences</a>
+      </p>
+      <p>&copy; {{ current_year }} {{ company_name }}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

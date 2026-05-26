@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Registration Rejected</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      background-color: #dc2626;
+      color: white;
+      padding: 20px;
+      text-align: center;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .content {
+      background-color: #f8fafc;
+      padding: 20px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .footer {
+      background-color: #64748b;
+      color: white;
+      padding: 15px;
+      text-align: center;
+      border-radius: 0 0 8px 8px;
+      font-size: 14px;
+    }
+
+    .rejection-info {
+      background-color: #fef2f2;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 4px;
+      border: 1px solid #fecaca;
+      border-left: 4px solid #dc2626;
+    }
+
+    .contact-info {
+      background-color: white;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .support-button {
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #2563eb;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>❌ Registration Not Approved</h1>
+    <h2>Express Auto Bike Management System</h2>
+  </div>
+
+  <div class="content">
+    <div class="rejection-info">
+      <strong>⚠️ Notice:</strong> Your account registration has not been approved at this time.
+    </div>
+
+    <p>Hello {{ recipient.get_full_name|default:recipient.email }},</p>
+
+    <p>We have reviewed your registration request for the Express Auto Bike Management System. Unfortunately, your
+      account has not been approved at this time.</p>
+
+    <div class="contact-info">
+      <h3>📋 Registration Details:</h3>
+      <ul>
+        <li><strong>Email:</strong> {{ recipient.email }}</li>
+        <li><strong>Requested Role:</strong> {{ notification.data.requested_role }}</li>
+        <li><strong>Reviewed By:</strong> {{ notification.data.rejector_email }}</li>
+        <li><strong>Review Date:</strong> {{ notification.created_at|date:"F j, Y g:i A" }}</li>
+      </ul>
+    </div>
+
+    <h3>🤔 What This Means:</h3>
+    <ul>
+      <li>Your account registration was not approved</li>
+      <li>You will not be able to access the system at this time</li>
+      <li>This decision may be due to various factors including role requirements or verification needs</li>
+    </ul>
+
+    <h3>📞 Next Steps:</h3>
+    <p>If you believe this decision was made in error or if you have additional information that might support your
+      registration, please contact our support team:</p>
+
+    <div class="support-button">
+      <a href="mailto:support@expressautobike.com?subject=Registration Appeal - {{ recipient.email }}" class="btn">
+        📧 Contact Support
+      </a>
+    </div>
+
+    <div class="contact-info">
+      <h3>📞 Support Information:</h3>
+      <ul>
+        <li><strong>Email:</strong> support@expressautobike.com</li>
+        <li><strong>Subject:</strong> Registration Appeal - {{ recipient.email }}</li>
+        <li><strong>Include:</strong> Your email address and reason for appeal</li>
+      </ul>
+    </div>
+
+    <p><strong>Important Notes:</strong></p>
+    <ul>
+      <li>You may reapply for registration in the future</li>
+      <li>Ensure you meet all requirements for your requested role</li>
+      <li>Provide accurate and complete information in your application</li>
+      <li>Contact support if you need clarification on requirements</li>
+    </ul>
+
+    <p><em>Thank you for your interest in the Express Auto Bike Management System.</em></p>
+  </div>
+
+  {% include "notifications/_whatsapp_button.html" with whatsapp_message="Hi! I want to appeal my registration rejection
+  for Express Auto Bike." %}
+
+  <div class="footer">
+    <p>Express Auto Bike Management System</p>
+    <p>This is an automated notification. For support, please use the contact information above.</p>
+  </div>
+</body>
+</html>

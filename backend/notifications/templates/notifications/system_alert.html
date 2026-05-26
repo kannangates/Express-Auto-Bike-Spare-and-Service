@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Alert - {{ company_name }}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+
+    .container {
+      background-color: white;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #dc2626;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: #1f2937;
+      margin-bottom: 10px;
+    }
+
+    .alert-badge {
+      background-color: #fee2e2;
+      color: #991b1b;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .alert-badge.warning {
+      background-color: #fef3c7;
+      color: #92400e;
+    }
+
+    .alert-badge.info {
+      background-color: #dbeafe;
+      color: #1e40af;
+    }
+
+    .content {
+      margin-bottom: 30px;
+    }
+
+    .greeting {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #1f2937;
+    }
+
+    .message {
+      font-size: 16px;
+      margin-bottom: 25px;
+      line-height: 1.7;
+    }
+
+    .alert-details {
+      background-color: #fef2f2;
+      border-left: 4px solid #dc2626;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+
+    .alert-details.warning {
+      background-color: #fffbeb;
+      border-left-color: #f59e0b;
+    }
+
+    .alert-details.info {
+      background-color: #eff6ff;
+      border-left-color: #3b82f6;
+    }
+
+    .alert-details h3 {
+      margin-top: 0;
+      color: #374151;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .detail-row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .detail-label {
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .detail-value {
+      color: #6b7280;
+    }
+
+    .priority-high {
+      color: #dc2626;
+      font-weight: bold;
+    }
+
+    .priority-medium {
+      color: #f59e0b;
+      font-weight: bold;
+    }
+
+    .priority-low {
+      color: #10b981;
+      font-weight: bold;
+    }
+
+    .action-button {
+      display: inline-block;
+      background-color: #dc2626;
+      color: white;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .action-button:hover {
+      background-color: #b91c1c;
+    }
+
+    .action-button.warning {
+      background-color: #f59e0b;
+    }
+
+    .action-button.warning:hover {
+      background-color: #d97706;
+    }
+
+    .action-button.info {
+      background-color: #3b82f6;
+    }
+
+    .action-button.info:hover {
+      background-color: #2563eb;
+    }
+
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      text-align: center;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .footer a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+
+      .container {
+        padding: 20px;
+      }
+
+      .detail-row {
+        flex-direction: column;
+      }
+
+      .detail-label {
+        margin-bottom: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">{{ company_name }}</div>
+      <div
+        class="alert-badge {% if notification.priority == 'HIGH' %}{% elif notification.priority == 'MEDIUM' %}warning{% else %}info{% endif %}">
+        ⚠️ System Alert
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="greeting">
+        Hello {{ recipient.get_full_name|default:recipient.email }},
+      </div>
+
+      <div class="message">
+        <strong>{{ notification.title }}</strong>
+      </div>
+
+      <div class="message">
+        {{ notification.message }}
+      </div>
+
+      <div
+        class="alert-details {% if notification.priority == 'HIGH' %}{% elif notification.priority == 'MEDIUM' %}warning{% else %}info{% endif %}">
+        <h3>Alert Information</h3>
+        <div class="detail-row">
+          <span class="detail-label">Alert Type:</span>
+          <span class="detail-value">{{ notification.notification_type|title }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Priority:</span>
+          <span class="detail-value">
+            <span
+              class="priority-{% if notification.priority == 'HIGH' %}high{% elif notification.priority == 'MEDIUM' %}medium{% else %}low{% endif %}">
+              {{ notification.priority }}
+            </span>
+          </span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Time:</span>
+          <span class="detail-value">{{ notification.created_at|date:"F j, Y g:i A" }}</span>
+        </div>
+        {% if notification_data.affected_systems %}
+        <div class="detail-row">
+          <span class="detail-label">Affected Systems:</span>
+          <span class="detail-value">{{ notification_data.affected_systems|join:", " }}</span>
+        </div>
+        {% endif %}
+        {% if notification_data.estimated_resolution %}
+        <div class="detail-row">
+          <span class="detail-label">Estimated Resolution:</span>
+          <span class="detail-value">{{ notification_data.estimated_resolution }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if notification_data.action_required %}
+      <div class="message">
+        <strong>Action Required:</strong><br>
+        {{ notification_data.action_required }}
+      </div>
+      {% endif %}
+
+      {% if notification_data.additional_info %}
+      <div class="message">
+        <strong>Additional Information:</strong><br>
+        {{ notification_data.additional_info }}
+      </div>
+      {% endif %}
+
+      <div class="message">
+        {% if notification.priority == 'HIGH' %}
+        This is a high-priority alert that requires immediate attention. Please review and take appropriate action as
+        soon as possible.
+        {% elif notification.priority == 'MEDIUM' %}
+        This alert requires your attention when convenient. Please review and take action within a reasonable timeframe.
+        {% else %}
+        This is an informational alert for your awareness. No immediate action is required.
+        {% endif %}
+      </div>
+
+      <a href="{{ base_url }}/admin/system/alerts"
+        class="action-button {% if notification.priority == 'HIGH' %}{% elif notification.priority == 'MEDIUM' %}warning{% else %}info{% endif %}">
+        View System Dashboard →
+      </a>
+    </div>
+
+    <div class="footer">
+      <p>
+        This is an automated system alert from {{ company_name }}.<br>
+        If you need assistance, please contact technical support at
+        <a href="mailto:{{ support_email }}">{{ support_email }}</a>
+      </p>
+      <p>
+        <a href="{{ base_url }}/notifications/preferences">Manage notification preferences</a>
+      </p>
+      <p>&copy; {{ current_year }} {{ company_name }}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

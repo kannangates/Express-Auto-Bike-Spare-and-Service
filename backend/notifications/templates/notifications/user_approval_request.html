@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Approval Request</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      background-color: #dc2626;
+      color: white;
+      padding: 20px;
+      text-align: center;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .content {
+      background-color: #f8fafc;
+      padding: 20px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .footer {
+      background-color: #64748b;
+      color: white;
+      padding: 15px;
+      text-align: center;
+      border-radius: 0 0 8px 8px;
+      font-size: 14px;
+    }
+
+    .user-info {
+      background-color: white;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #dc2626;
+    }
+
+    .action-buttons {
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      margin: 0 10px;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .btn-approve {
+      background-color: #16a34a;
+      color: white;
+    }
+
+    .btn-reject {
+      background-color: #dc2626;
+      color: white;
+    }
+
+    .urgent-notice {
+      background-color: #fef2f2;
+      border: 1px solid #fecaca;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 15px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🔔 User Approval Required</h1>
+    <h2>Express Auto Bike Management System</h2>
+  </div>
+
+  <div class="content">
+    <div class="urgent-notice">
+      <strong>⚠️ Action Required:</strong> A new user registration requires your approval.
+    </div>
+
+    <p>Hello {{ recipient.get_full_name|default:recipient.email }},</p>
+
+    <p>A new user has registered for the Express Auto Bike Management System and requires approval before they can
+      access the system.</p>
+
+    <div class="user-info">
+      <h3>👤 User Information:</h3>
+      <ul>
+        <li><strong>Email:</strong> {{ notification.data.user_email }}</li>
+        <li><strong>Requested Role:</strong> {{ notification.data.user_role }}</li>
+        <li><strong>Registration Date:</strong> {{ notification.created_at|date:"F j, Y g:i A" }}</li>
+        {% if notification.data.user_name %}
+        <li><strong>Name:</strong> {{ notification.data.user_name }}</li>
+        {% endif %}
+        {% if notification.data.google_id %}
+        <li><strong>Google Account:</strong> Connected</li>
+        {% endif %}
+      </ul>
+    </div>
+
+    <div class="action-buttons">
+      <a href="{{ base_url }}/admin/users/{{ notification.data.user_id }}/approve/" class="btn btn-approve">
+        ✅ Approve User
+      </a>
+      <a href="{{ base_url }}/admin/users/{{ notification.data.user_id }}/reject/" class="btn btn-reject">
+        ❌ Reject User
+      </a>
+    </div>
+
+    <p><strong>Next Steps:</strong></p>
+    <ol>
+      <li>Review the user's information above</li>
+      <li>Click "Approve User" to grant access with the requested role</li>
+      <li>Click "Reject User" if the registration should be denied</li>
+      <li>You can also manage users through the admin panel</li>
+    </ol>
+
+    <p><em>This approval request was generated automatically when the user completed registration.</em></p>
+  </div>
+
+  <div class="footer">
+    <p>Express Auto Bike Management System - Admin Notification</p>
+    <p>Please do not reply to this email. Use the admin panel for user management.</p>
+  </div>
+</body>
+</html>

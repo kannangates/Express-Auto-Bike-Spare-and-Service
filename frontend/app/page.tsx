@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Package, ClipboardList, BarChart3, Zap, MessageCircle } from 'lucide-react'
-import { api } from '../utils/api'
+import { api, extractList } from '../utils/api'
 
 interface Product {
   id: number
@@ -86,7 +86,7 @@ export default function HomePage() {
     const fetchProducts = async () => {
       try {
         const data = await api.get('/api/v1/inventory/items/', { page_size: '24', is_active: 'true' })
-        const items = Array.isArray(data) ? data : (data.results ?? [])
+        const items = extractList<Record<string, unknown>>(data)
         setProducts(items.map((item: Record<string, unknown>) => ({
           id: item.id as number,
           name: item.name as string,

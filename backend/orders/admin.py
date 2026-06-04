@@ -83,9 +83,9 @@ class CustomerOrderAdmin(admin.ModelAdmin):
         if request.user.has_role_permission(['OWNER', 'OPERATIONS']):
             return qs
         elif request.user.has_role_permission(['CASHIER']):
-            return qs.filter(status__in=['PENDING', 'CONFIRMED', 'PROCESSING'])
+            return qs.filter(status__in=['PENDING', 'CONFIRMED'])
         elif request.user.has_role_permission(['DELIVERY']):
-            return qs.filter(status__in=['PROCESSING', 'SHIPPED'])
+            return qs.filter(status__in=['SHIPPED'])
         elif request.user.is_customer():
             return qs.filter(customer=request.user)
         return qs.none()
@@ -101,7 +101,7 @@ class CustomerOrderAdmin(admin.ModelAdmin):
         elif request.user.has_role_permission(['CASHIER']) and obj:
             return obj.status in ['PENDING', 'CONFIRMED']
         elif request.user.has_role_permission(['DELIVERY']) and obj:
-            return obj.status in ['PROCESSING', 'SHIPPED']
+            return obj.status in ['SHIPPED']
         return False
     
     def has_add_permission(self, request):
@@ -143,7 +143,7 @@ class OrderItemAdmin(admin.ModelAdmin):
         if request.user.has_role_permission(['OWNER', 'OPERATIONS']):
             return qs
         elif request.user.has_role_permission(['CASHIER', 'DELIVERY']):
-            return qs.filter(order__status__in=['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED'])
+            return qs.filter(order__status__in=['PENDING', 'CONFIRMED', 'SHIPPED'])
         elif request.user.is_customer():
             return qs.filter(order__customer=request.user)
         return qs.none()

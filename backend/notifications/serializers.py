@@ -26,10 +26,10 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'recipient', 'recipient_name',
             'notification_type', 'title', 'message', 'data', 'is_read',
-            'email_sent', 'email_sent_at', 'created_at', 'read_at', 'time_since'
+            'is_email_sent', 'email_sent_at', 'created_at', 'time_since'
         ]
         read_only_fields = [
-            'email_sent', 'email_sent_at', 'created_at', 'read_at'
+            'is_email_sent', 'email_sent_at', 'created_at'
         ]
     
     def get_time_since(self, obj):

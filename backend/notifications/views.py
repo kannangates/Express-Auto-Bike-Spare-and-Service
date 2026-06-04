@@ -41,7 +41,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Return notifications for the current user."""
-        return Notification.objects.select_related('recipient', 'sender').filter(recipient=self.request.user)
+        return Notification.objects.select_related('recipient').filter(recipient=self.request.user)
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
@@ -61,7 +61,6 @@ class NotificationViewSet(viewsets.ModelViewSet):
                 recipient = User.objects.get(id=recipient_id)
                 notification = Notification.objects.create(
                     recipient=recipient,
-                    sender=self.request.user,
                     **notification_data
                 )
                 notifications.append(notification)
@@ -123,7 +122,6 @@ class MarkNotificationReadView(APIView):
         
         if not notification.is_read:
             notification.is_read = True
-            notification.read_at = timezone.now()
             notification.save()
         
         serializer = NotificationSerializer(notification)
@@ -148,10 +146,7 @@ class MarkAllNotificationsReadView(APIView):
             is_read=False
         )
         
-        count = unread_notifications.update(
-            is_read=True,
-            read_at=timezone.now()
-        )
+        count = unread_notifications.update(is_read=True)
         
         return Response({
             'message': f'{count} notifications marked as read'
@@ -281,7 +276,6 @@ class LowStockNotificationView(APIView):
             
             notification = Notification.objects.create(  # noqa: F841
                 recipient=user,
-                sender=request.user,
                 notification_type='LOW_STOCK',
                 title='Low Stock Alert',
                 message=f'{low_stock_items.count()} items are running low on stock',
@@ -346,7 +340,6 @@ class PendingApprovalsNotificationView(APIView):
             
             notification = Notification.objects.create(  # noqa: F841
                 recipient=user,
-                sender=request.user,
                 notification_type='USER_APPROVAL',
                 title='Pending User Approvals',
                 message=f'{pending_users.count()} users are waiting for approval',
@@ -405,7 +398,6 @@ class SendBulkNotificationView(APIView):
             for recipient in recipients:
                 notification = Notification.objects.create(
                     recipient=recipient,
-                    sender=request.user,
                     notification_type=notification_type,
                     title=title,
                     message=message,

@@ -22,6 +22,16 @@ from .serializers import (
 from authentication.permissions import OperationsPermission, CashierPermission
 
 
+def _calculate_stock_change(adjustment_type: str, quantity: int, current_stock: int) -> int:
+    if adjustment_type == 'SET':
+        return quantity - current_stock
+    elif adjustment_type == 'ADD':
+        return quantity
+    elif adjustment_type == 'SUBTRACT':
+        return -quantity
+    return 0
+
+
 class InventoryCategoryViewSet(viewsets.ModelViewSet):
     """
     ViewSet for inventory category management.
@@ -139,16 +149,8 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
             notes = serializer.validated_data.get('notes', '')
             
             try:
-                if adjustment_type == 'SET':
-                    # Set stock to specific quantity
-                    quantity_change = quantity - item.stock_quantity
-                elif adjustment_type == 'ADD':
-                    # Add to current stock
-                    quantity_change = quantity
-                elif adjustment_type == 'SUBTRACT':
-                    # Subtract from current stock
-                    quantity_change = -quantity
-                
+                quantity_change = _calculate_stock_change(adjustment_type, quantity, item.stock_quantity)
+
                 new_stock = item.update_stock(
                     quantity_change=quantity_change,
                     transaction_type='ADJUSTMENT',
@@ -257,13 +259,8 @@ class StockAdjustmentView(APIView):
             notes = serializer.validated_data.get('notes', '')
             
             try:
-                if adjustment_type == 'SET':
-                    quantity_change = quantity - item.stock_quantity
-                elif adjustment_type == 'ADD':
-                    quantity_change = quantity
-                elif adjustment_type == 'SUBTRACT':
-                    quantity_change = -quantity
-                
+                quantity_change = _calculate_stock_change(adjustment_type, quantity, item.stock_quantity)
+
                 previous_stock = item.stock_quantity
                 new_stock = item.update_stock(
                     quantity_change=quantity_change,

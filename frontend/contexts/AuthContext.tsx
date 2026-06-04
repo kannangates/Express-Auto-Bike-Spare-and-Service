@@ -116,24 +116,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [])
 
-  // Refresh token function - only called when we have a valid refresh token
-  const refreshToken = useCallback(async () => {
-    // We use JWT access tokens stored in cookies only - no refresh token stored
-    // Just re-verify the current token silently
-    try {
-      const token = getAuthToken()
-      if (!token || isTokenExpired(token)) {
-        await logout()
-        return
-      }
-      const verifyResponse = await authApi.verify()
-      setUser(verifyResponse.user)
-    } catch {
-      // Token invalid - logout silently
-      await logout()
-    }
-  }, [logout])
-
   // Permission checking functions
   const hasPermission = useCallback((permission: string): boolean => {
     if (!user) return false
@@ -178,7 +160,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading,
     login,
     logout,
-    refreshToken,
     hasPermission,
     hasRole,
     isApproved,

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { InventoryRoute } from '../../components/auth/ProtectedRoute';
 import { MainLayout } from '../../components/layout/MainLayout';
-import { inventoryApi } from '../../utils/api';
+import { inventoryApi, extractList } from '../../utils/api';
 import { Package, Plus, Search, AlertTriangle, X, Check } from 'lucide-react';
 
 interface Category { id: number; name: string }
@@ -167,8 +167,7 @@ const InventoryPage: React.FC = () => {
       if (search) params.search = search
       if (categoryFilter) params.category = Number(categoryFilter)
       const data = await inventoryApi.list(params as Parameters<typeof inventoryApi.list>[0])
-      const list = Array.isArray(data) ? data : (data as { results?: InventoryItemData[] }).results ?? []
-      setItems(list)
+      setItems(extractList<InventoryItemData>(data))
     } catch { showToast('Failed to load inventory', 'error') }
     finally { setLoading(false) }
   }, [search, categoryFilter])
@@ -177,8 +176,7 @@ const InventoryPage: React.FC = () => {
 
   useEffect(() => {
     inventoryApi.categories().then((data: unknown) => {
-      const list = Array.isArray(data) ? data : (data as { results?: Category[] }).results ?? []
-      setCategories(list)
+      setCategories(extractList<Category>(data))
     }).catch(() => { showToast('Failed to load categories', 'error'); setCategoryError(true) })
   }, [])
 

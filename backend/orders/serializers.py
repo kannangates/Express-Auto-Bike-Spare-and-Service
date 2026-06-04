@@ -280,11 +280,10 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
             # Define allowed status transitions
             allowed_transitions = {
                 'PENDING': ['CONFIRMED', 'CANCELLED'],
-                'CONFIRMED': ['PROCESSING', 'CANCELLED'],
-                'PROCESSING': ['SHIPPED', 'CANCELLED'],
-                'SHIPPED': ['DELIVERED'],
-                'DELIVERED': [],  # Final state
-                'CANCELLED': []   # Final state
+                'CONFIRMED': ['SHIPPED', 'CANCELLED'],
+                'SHIPPED': ['DELIVERED', 'CANCELLED'],
+                'DELIVERED': [],
+                'CANCELLED': [],
             }
             
             if value not in allowed_transitions.get(current_status, []):

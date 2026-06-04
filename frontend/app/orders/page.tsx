@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import { useSearchParams } from 'next/navigation';
 import { OrderRoute } from '../../components/auth/ProtectedRoute';
 import { MainLayout } from '../../components/layout/MainLayout';
-import { inventoryApi, orderApi, userApi, dashboardApi } from '../../utils/api';
+import { inventoryApi, orderApi, userApi, dashboardApi, extractList } from '../../utils/api';
 import { X, Plus, Minus, Trash2, Search, ScanBarcode, ShoppingCart, Check, User, Phone, Banknote, CreditCard, Smartphone, ClipboardList, Pencil, Printer } from 'lucide-react';
 
 interface InventoryItemData { id: number; barcode: string; name: string; unit_price: number | string; stock_quantity: number; is_active: boolean }
@@ -176,8 +176,7 @@ function OrderModal({ onClose, onOrderPlaced }: { onClose: () => void; onOrderPl
     setSearching(true)
     try {
       const data = await inventoryApi.list({ search: q })
-      const list = Array.isArray(data) ? data : (data as { results?: InventoryItemData[] }).results ?? []
-      setSearchResults(list.filter((i: InventoryItemData) => i.is_active && i.stock_quantity > 0))
+      setSearchResults(extractList<InventoryItemData>(data).filter((i: InventoryItemData) => i.is_active && i.stock_quantity > 0))
     } catch { setSearchResults([]) }
     finally { setSearching(false) }
   }, [])
@@ -196,8 +195,7 @@ function OrderModal({ onClose, onOrderPlaced }: { onClose: () => void; onOrderPl
     setBarcodeMsg({ text: 'Looking up...', type: 'info' })
     try {
       const data = await inventoryApi.list({ search: barcode })
-      const list = Array.isArray(data) ? data : (data as { results?: InventoryItemData[] }).results ?? []
-      const item = list.find((i: InventoryItemData) => i.barcode === barcode)
+      const item = extractList<InventoryItemData>(data).find((i: InventoryItemData) => i.barcode === barcode)
       if (!item) { setBarcodeMsg({ text: `No item found for: ${barcode}`, type: 'error' }); return }
       if (!item.is_active) { setBarcodeMsg({ text: `"${item.name}" is inactive`, type: 'error' }); return }
       if (item.stock_quantity <= 0) { setBarcodeMsg({ text: `"${item.name}" is out of stock`, type: 'error' }); return }
@@ -541,15 +539,18 @@ const OrdersPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false)
   const [orders, setOrders] = useState<OrderData[]>([])
   const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [editOrder, setEditOrder] = useState<OrderData | null>(null)
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type }); setTimeout(() => setToast(null), 4000)
+  }
 
   const loadOrders = useCallback(async () => {
     try {
       setLoading(true)
       const data = await orderApi.list()
-      const list = Array.isArray(data) ? data : (data as { results?: OrderData[] }).results ?? []
-      setOrders(list)
+      setOrders(extractList<OrderData>(data))
     } catch (err) {
       console.error('Failed to load orders:', err)
       setOrders([])
@@ -564,8 +565,7 @@ const OrdersPage: React.FC = () => {
   }, [searchParams])
 
   const handleOrderPlaced = () => {
-    setToast('Order placed successfully!')
-    setTimeout(() => setToast(''), 4000)
+    showToast('Order placed successfully!')
     loadOrders()
   }
 
@@ -580,11 +580,11 @@ const OrdersPage: React.FC = () => {
     <OrderRoute>
       <MainLayout title="Order Processing" subtitle="Process customer orders">
         {showModal && <OrderModal onClose={() => setShowModal(false)} onOrderPlaced={handleOrderPlaced} />}
-        {editOrder && <OrderEditModal order={editOrder} onClose={() => setEditOrder(null)} onSaved={() => { loadOrders(); setToast('Order updated!'); setTimeout(() => setToast(''), 3000) }} />}
+        {editOrder && <OrderEditModal order={editOrder} onClose={() => setEditOrder(null)} onSaved={() => { loadOrders(); showToast('Order updated!') }} />}
 
         {toast && (
-          <div className="fixed top-4 right-4 z-50 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm shadow-lg">
-            ✓ {toast}
+          <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-sm border shadow-lg ${toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+            {toast.msg}
           </div>
         )}
 

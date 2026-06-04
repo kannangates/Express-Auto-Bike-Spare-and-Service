@@ -52,6 +52,8 @@ export default function NotificationsPage() {
       setHasMore(!!response.data.next);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
+      setErrorMsg('Failed to load notifications. Please refresh the page.');
+      setTimeout(() => setErrorMsg(''), 5000);
     } finally {
       setLoading(false);
     }

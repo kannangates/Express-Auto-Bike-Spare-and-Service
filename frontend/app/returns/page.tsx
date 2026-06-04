@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { OrderRoute } from '../../components/auth/ProtectedRoute';
 import { MainLayout } from '../../components/layout/MainLayout';
-import { orderApi, returnApi } from '../../utils/api';
+import { orderApi, returnApi, extractList } from '../../utils/api';
 import { useAlert } from '../../components/ui/Alert';
 import { Search, RotateCcw, Pencil, Check, X, Plus } from 'lucide-react';
 
@@ -33,9 +33,8 @@ function ReturnModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     setLooking(true)
     try {
       const data = await orderApi.list({ search: orderInput.trim() })
-      const list = Array.isArray(data) ? data : (data as { results?: OrderDetail[] }).results ?? []
       // Require an exact order_number match to avoid loading the wrong order
-      const found = list.find((o: OrderDetail) =>
+      const found = extractList<OrderDetail>(data).find((o: OrderDetail) =>
         o.order_number.toLowerCase() === orderInput.trim().toLowerCase()
       )
       if (!found) {
@@ -234,16 +233,19 @@ const returnStatusColors: Record<string, string> = {
 
 const ReturnsPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [returns, setReturns] = useState<ReturnListItem[]>([])
   const [loading, setLoading] = useState(true)
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type }); setTimeout(() => setToast(null), 4000)
+  }
 
   const loadReturns = useCallback(async () => {
     try {
       setLoading(true)
       const data = await returnApi.list()
-      const list = Array.isArray(data) ? data : (data as { results?: ReturnListItem[] }).results ?? []
-      setReturns(list)
+      setReturns(extractList<ReturnListItem>(data))
     } catch {
       // silently fail — empty list shown
     } finally {
@@ -254,8 +256,7 @@ const ReturnsPage: React.FC = () => {
   useEffect(() => { loadReturns() }, [loadReturns])
 
   const handleCreated = () => {
-    setToast('Return processed successfully!')
-    setTimeout(() => setToast(''), 4000)
+    showToast('Return processed successfully!')
     loadReturns()
   }
 
@@ -265,8 +266,8 @@ const ReturnsPage: React.FC = () => {
         {showModal && <ReturnModal onClose={() => setShowModal(false)} onCreated={handleCreated} />}
 
         {toast && (
-          <div className="fixed top-4 right-4 z-50 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm shadow-lg">
-            ✓ {toast}
+          <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-sm border shadow-lg ${toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+            {toast.msg}
           </div>
         )}
 

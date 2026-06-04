@@ -693,7 +693,6 @@ export interface AuthContextValue {
   loading: boolean;
   login: (credentials: any) => Promise<{ access_token: string; user: User }>;
   logout: () => Promise<void>;
-  refreshToken: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
   hasRole: (role: UserRole | UserRole[]) => boolean;
   isApproved: boolean;

@@ -301,3 +301,15 @@ export const isNetworkError = (error: any): boolean => {
 // The previous localStorage-based cache functions (cacheApiResponse, getCachedApiResponse,
 // clearApiCache) have been deleted. If offline support is needed in future, use a
 // service-worker cache or IndexedDB, not localStorage.
+
+/**
+ * Normalise a paginated or direct-array API response to a plain array.
+ * Use instead of the inline Array.isArray(data) ? data : data.results ?? [] pattern.
+ */
+export function extractList<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[]
+  if (data && typeof data === 'object' && 'results' in data) {
+    return ((data as { results?: T[] }).results) ?? []
+  }
+  return []
+}

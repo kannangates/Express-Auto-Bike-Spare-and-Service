@@ -271,7 +271,7 @@ const ReturnForm: React.FC<ReturnFormProps> = ({
 
     update(index, {
       ...item,
-      condition: condition as any,
+      condition: condition as 'NEW' | 'GOOD' | 'DAMAGED' | 'DEFECTIVE',
       restockable,
     });
   };

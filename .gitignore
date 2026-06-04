@@ -44,6 +44,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Allow frontend/lib (shadcn/ui utils) — the lib/ ignore above targets Python venvs only
+!frontend/lib/
 parts/
 sdist/
 var/

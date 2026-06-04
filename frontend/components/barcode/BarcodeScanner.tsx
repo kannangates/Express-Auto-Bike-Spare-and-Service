@@ -103,7 +103,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   }, [validateBarcode, onScanSuccess, verbose]);
 
   // Handle scan error
-  const handleScanError = useCallback((errorMessage: string, error?: any) => {
+  const handleScanError = useCallback((errorMessage: string, error?: unknown) => {
     // Only log actual errors, not "No QR code found" messages
     if (!errorMessage.includes('No QR code found') && !errorMessage.includes('QR code parse error')) {
       if (verbose) {
@@ -144,7 +144,8 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const initializeScanner = useCallback(() => {
     if (!elementRef.current || scannerRef.current) return;
 
-    const config: any = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const config: any = { // html5-qrcode does not export its config type
       fps,
       qrbox,
       aspectRatio,

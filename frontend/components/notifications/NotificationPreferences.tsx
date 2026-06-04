@@ -120,9 +120,10 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to save notification preferences:', error);
-      setError(error.response?.data?.message || 'Failed to save preferences');
+      const msg = error instanceof Error ? error.message : 'Failed to save preferences';
+      setError((error as { response?: { data?: { message?: string } } })?.response?.data?.message || msg);
     } finally {
       setSaving(false);
     }

@@ -211,6 +211,10 @@ class InventoryItem(models.Model):
                 created_by=user
             )
 
+        # Invalidate the low stock cache so the next request reflects updated stock levels
+        from django.core.cache import cache
+        cache.delete('inventory:low_stock_alert')
+
         # Check for low stock and trigger notification (outside atomic block)
         if self.is_low_stock() and transaction_type == 'OUT':
             self._trigger_low_stock_notification()

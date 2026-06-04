@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Backup configuration
 BACKUP_DIR="backups"
-BACKUP_RETENTION_DAYS=7
+GDRIVE_REMOTE="gdrive:ExpressAutoBikeBackups"
 
 # Owner Gmail accounts — seeded automatically on every deploy.
 # Add more emails here if needed; duplicates are silently skipped.
@@ -79,9 +79,9 @@ auto_backup() {
             fi
         fi
         
-        # Clean old backups (keep last 7 days)
-        find "$BACKUP_DIR" -name "db_backup_*.sql" -mtime +$BACKUP_RETENTION_DAYS -delete 2>/dev/null || true
-        find "$BACKUP_DIR" -name "media_backup_*.tar.gz" -mtime +$BACKUP_RETENTION_DAYS -delete 2>/dev/null || true
+        # Keep only this latest local backup (Google Drive is the persistent store)
+        find "$BACKUP_DIR" -name "db_backup_*.sql" ! -name "db_backup_${TIMESTAMP}.sql" -delete 2>/dev/null || true
+        find "$BACKUP_DIR" -name "media_backup_*.tar.gz" ! -name "media_backup_${TIMESTAMP}.tar.gz" -delete 2>/dev/null || true
     fi
 }
 
@@ -146,20 +146,20 @@ fi
 # Determine which docker-compose files to use
 case "$DEPLOYMENT_MODE" in
     development)
-        COMPOSE_FILES="-f docker-compose.yml"
-        print_info "Using development configuration (docker-compose.override.yml auto-loaded)"
-        ;;
-    production)
-        COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
-        print_info "Using production configuration with Traefik & SSL"
+        COMPOSE_FILES="-f docker-compose.yml -f docker-compose-local.yml"
+        print_info "Mode: local development (hot reload)"
         ;;
     tunnel)
-        COMPOSE_FILES="-f docker-compose.yml -f docker-compose.tunnel.yml"
-        print_info "Using Cloudflare Tunnel configuration"
+        COMPOSE_FILES="-f docker-compose.yml -f docker-compose-trycloudflare.yml"
+        print_info "Mode: trycloudflare.com (public shop access)"
+        ;;
+    server)
+        COMPOSE_FILES="-f docker-compose.yml -f docker-compose-server.yml"
+        print_info "Mode: server/VPS with Traefik SSL"
         ;;
     *)
         print_error "Invalid DEPLOYMENT_MODE: $DEPLOYMENT_MODE"
-        print_info "Valid options: development, production, tunnel"
+        print_info "Valid options: development | tunnel | server"
         exit 1
         ;;
 esac
@@ -171,26 +171,7 @@ case "$COMMAND" in
     up)
         # Check if tunnel mode and ask about domain preference
         if [ "$DEPLOYMENT_MODE" = "tunnel" ]; then
-            if [ -z "${CLOUDFLARE_TUNNEL_NAME:-}" ]; then
-                echo ""
-                print_info "Tunnel Mode Detected"
-                echo ""
-                echo "You have two options:"
-                echo "  1. Temporary Tunnel (URL changes on restart, auto-updates .env)"
-                echo "  2. Permanent Tunnel (URL never changes, requires one-time setup)"
-                echo ""
-                read -p "Do you have a permanent tunnel setup? (yes/no): " HAS_PERMANENT
-                
-                if [[ $HAS_PERMANENT =~ ^[Yy] ]]; then
-                    print_warning "Please run: ./setup-tunnel-simple.sh first"
-                    print_info "Then restart: ./deploy.sh"
-                    exit 1
-                else
-                    print_info "Using temporary tunnel (auto-updates .env)"
-                fi
-            else
-                print_info "Using permanent tunnel: ${CLOUDFLARE_TUNNEL_NAME}"
-            fi
+            print_info "Starting in trycloudflare.com mode — URL will appear in the app banner."
         fi
         
         print_info "Starting services..."
@@ -222,67 +203,41 @@ case "$COMMAND" in
             echo "  Frontend: http://localhost:${FRONTEND_PORT:-3000}"
             echo "  Backend:  http://localhost:${BACKEND_PORT:-8000}"
             echo "  Admin:    http://localhost:${BACKEND_PORT:-8000}/admin/"
-        elif [ "$DEPLOYMENT_MODE" = "production" ]; then
+        elif [ "$DEPLOYMENT_MODE" = "server" ]; then
             echo "  Frontend: https://${FRONTEND_DOMAIN}"
             echo "  Backend:  https://${BACKEND_DOMAIN}"
             echo "  Admin:    https://${BACKEND_DOMAIN}/admin/"
+            print_info "SSL certificate will be issued automatically by Let's Encrypt on first request."
         elif [ "$DEPLOYMENT_MODE" = "tunnel" ]; then
-            if [ -n "${CLOUDFLARE_TUNNEL_NAME:-}" ]; then
-                # Permanent tunnel
-                print_success "Permanent Tunnel Active!"
-                echo "  URL: ${TUNNEL_FRONTEND_URL}"
-                echo "  This URL never changes!"
-            else
-                # Temporary tunnel - auto-update .env
-                print_info "Temporary Tunnel is starting..."
+            print_info "Waiting for tunnel URL (up to 20 seconds)..."
+            sleep 15
+            TUNNEL_URL=$(docker-compose $COMPOSE_FILES logs cloudflared 2>/dev/null \
+                | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | head -1)
+
+            if [ -n "$TUNNEL_URL" ]; then
+                # Store in Redis so the in-app banner shows it automatically
+                docker-compose $COMPOSE_FILES exec -T redis \
+                    redis-cli SET tunnel_url "$TUNNEL_URL" EX 86400 > /dev/null
+
+                # Update .env for backend CORS/ALLOWED_HOSTS then restart
+                for KEY in TUNNEL_FRONTEND_URL TUNNEL_BACKEND_URL; do
+                    if grep -q "^${KEY}=" .env; then
+                        sed -i.bak "s|^${KEY}=.*|${KEY}=$TUNNEL_URL|" .env
+                    else
+                        echo "${KEY}=$TUNNEL_URL" >> .env
+                    fi
+                done
+                rm -f .env.bak
+                docker-compose $COMPOSE_FILES restart backend frontend
+
                 echo ""
-                print_warning "Getting your tunnel URL..."
-                echo "  Waiting for cloudflared to start (10 seconds)..."
-                sleep 10
-                
-                # Get tunnel URL from logs
-                TUNNEL_URL=$(docker-compose $COMPOSE_FILES logs cloudflared 2>/dev/null | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | head -1)
-                
-                if [ -n "$TUNNEL_URL" ]; then
-                    echo ""
-                    print_success "Tunnel URL: $TUNNEL_URL"
-                    
-                    # Automatically update .env file
-                    print_info "Automatically updating .env file..."
-                    
-                    # Update or add TUNNEL_FRONTEND_URL
-                    if grep -q "^TUNNEL_FRONTEND_URL=" .env; then
-                        sed -i.bak "s|^TUNNEL_FRONTEND_URL=.*|TUNNEL_FRONTEND_URL=$TUNNEL_URL|" .env
-                    else
-                        echo "TUNNEL_FRONTEND_URL=$TUNNEL_URL" >> .env
-                    fi
-                    
-                    # Update or add TUNNEL_BACKEND_URL
-                    if grep -q "^TUNNEL_BACKEND_URL=" .env; then
-                        sed -i.bak "s|^TUNNEL_BACKEND_URL=.*|TUNNEL_BACKEND_URL=$TUNNEL_URL|" .env
-                    else
-                        echo "TUNNEL_BACKEND_URL=$TUNNEL_URL" >> .env
-                    fi
-                    
-                    # Remove backup file
-                    rm -f .env.bak
-                    
-                    print_success ".env file updated automatically!"
-                    echo ""
-                    print_info "Restarting services with new tunnel URL..."
-                    docker-compose $COMPOSE_FILES restart backend frontend
-                    
-                    echo ""
-                    print_success "All done! Share this URL with your users:"
-                    echo "  $TUNNEL_URL"
-                    echo ""
-                    print_warning "Note: This URL will change when you restart."
-                    print_info "For a permanent URL, run: ./setup-tunnel-simple.sh"
-                else
-                    echo ""
-                    print_warning "Tunnel URL not ready yet. Check logs:"
-                    echo "  ./deploy.sh logs cloudflared"
-                fi
+                print_success "Share this URL with customers/staff:"
+                echo "  $TUNNEL_URL"
+                echo ""
+                print_info "The URL also appears in the app's top banner for all logged-in users."
+                print_warning "This URL changes every restart."
+            else
+                print_warning "Tunnel URL not ready yet. Check: ./deploy.sh logs cloudflared"
             fi
         fi
         ;;
@@ -349,35 +304,37 @@ case "$COMMAND" in
         ;;
         
     backup)
-        print_info "Creating manual backup..."
-        
-        # Create backup directory
+        print_info "Creating backup and uploading to Google Drive..."
         mkdir -p "$BACKUP_DIR"
-        
+
         TIMESTAMP=$(date +%Y%m%d_%H%M%S)
         DB_BACKUP_FILE="$BACKUP_DIR/db_backup_$TIMESTAMP.sql"
-        MEDIA_BACKUP_FILE="$BACKUP_DIR/media_backup_$TIMESTAMP.tar.gz"
-        
-        # Backup database
-        print_info "Backing up database..."
-        docker-compose $COMPOSE_FILES exec -T postgres pg_dump -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-express_auto_bike} > "$DB_BACKUP_FILE"
-        print_success "Database backed up: $DB_BACKUP_FILE"
-        
-        # Backup media files
-        if [ -d "backend/media" ] && [ "$(ls -A backend/media 2>/dev/null)" ]; then
-            print_info "Backing up media files..."
-            tar -czf "$MEDIA_BACKUP_FILE" -C backend media/
-            print_success "Media files backed up: $MEDIA_BACKUP_FILE"
+
+        # Dump database
+        docker-compose $COMPOSE_FILES exec -T postgres \
+            pg_dump -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-express_auto_bike} \
+            > "$DB_BACKUP_FILE"
+        print_success "Database dumped: $DB_BACKUP_FILE"
+
+        # Keep only this latest backup locally (delete older ones)
+        find "$BACKUP_DIR" -name "db_backup_*.sql" ! -name "db_backup_${TIMESTAMP}.sql" -delete
+        print_info "Old local backups removed."
+
+        # Upload to Google Drive and keep only latest there too
+        if command -v rclone &>/dev/null && rclone lsd "$GDRIVE_REMOTE" &>/dev/null; then
+            print_info "Uploading to Google Drive..."
+            rclone copy "$DB_BACKUP_FILE" "$GDRIVE_REMOTE/"
+            # Remove old backups from Drive
+            rclone ls "$GDRIVE_REMOTE" --include "db_backup_*.sql" \
+                | awk '{print $2}' | grep -v "db_backup_${TIMESTAMP}.sql" \
+                | while read -r old; do
+                    rclone delete "$GDRIVE_REMOTE/$old"
+                    print_info "Removed old Drive backup: $old"
+                done
+            print_success "Uploaded to Google Drive: $(basename "$DB_BACKUP_FILE")"
         else
-            print_warning "No media files found to backup"
-        fi
-        
-        print_success "Backup completed!"
-        echo ""
-        print_info "Backup files:"
-        echo "  Database: $DB_BACKUP_FILE"
-        if [ -f "$MEDIA_BACKUP_FILE" ]; then
-            echo "  Media:    $MEDIA_BACKUP_FILE"
+            print_warning "rclone not configured — backup saved locally only."
+            print_info "Run ./deploy-first-time.sh gdrive-setup to configure Google Drive."
         fi
         ;;
         
@@ -436,32 +393,18 @@ case "$COMMAND" in
         ;;
         
     schedule-backup)
-        print_info "Setting up scheduled daily backups..."
-        
-        # Get absolute path to script
+        print_info "Setting up daily noon backup..."
         SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
         PROJECT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        
-        # Create cron job (runs daily at 2 AM)
-        CRON_JOB="0 2 * * * cd $PROJECT_PATH && $SCRIPT_PATH backup >> $PROJECT_PATH/backups/backup.log 2>&1"
-        
-        # Check if cron job already exists
-        if crontab -l 2>/dev/null | grep -q "$SCRIPT_PATH backup"; then
-            print_warning "Scheduled backup already exists!"
-            print_info "Current cron jobs:"
-            crontab -l | grep "$SCRIPT_PATH"
+        CRON_JOB="0 12 * * * cd $PROJECT_PATH && $SCRIPT_PATH backup >> $PROJECT_PATH/backups/backup.log 2>&1"
+
+        if crontab -l 2>/dev/null | grep -q "deploy.sh backup"; then
+            print_warning "Daily backup cron already exists — skipping."
         else
-            # Add cron job
             (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
-            print_success "Scheduled backup added!"
-            print_info "Backups will run daily at 2:00 AM"
+            print_success "Daily backup scheduled at 12:00 noon."
             print_info "Logs: $PROJECT_PATH/backups/backup.log"
         fi
-        
-        print_info ""
-        print_info "To remove scheduled backup, run:"
-        echo "  crontab -e"
-        echo "  # Then delete the line containing: $SCRIPT_PATH backup"
         ;;
         
     list-backups)
@@ -507,10 +450,10 @@ case "$COMMAND" in
         echo "  clean                 Remove all containers and volumes"
         echo "  help                  Show this help message"
         echo ""
-        echo "Deployment modes (set in .env):"
-        echo "  DEPLOYMENT_MODE=development  - Local development (no auto-backup)"
-        echo "  DEPLOYMENT_MODE=production   - Production with SSL (auto-backup enabled)"
-        echo "  DEPLOYMENT_MODE=tunnel       - Cloudflare Tunnel (auto-backup enabled)"
+        echo "Deployment modes (set DEPLOYMENT_MODE= in .env):"
+        echo "  development  Local dev, hot reload  → docker-compose-local.yml"
+        echo "  tunnel       Shop PC, trycloudflare  → docker-compose-trycloudflare.yml"
+        echo "  server       VPS + domain + SSL       → docker-compose-server.yml"
         echo ""
         echo "Backup features:"
         echo "  • Auto-backup before restart/down in production/tunnel modes"

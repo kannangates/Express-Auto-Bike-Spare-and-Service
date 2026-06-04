@@ -31,9 +31,8 @@ All root-level commands run from the project root via `npm run <command>`:
 ### Running the App
 
 ```bash
-npm run docker:dev           # Start all services in Docker (recommended)
-npm run docker:hybrid        # Backend in Docker, frontend runs locally
-npm run dev                  # Run frontend + backend locally (no Docker)
+./deploy.sh up               # Start app (recommended — handles env + tunnel URL)
+npm run dev                  # Run frontend + backend locally without Docker
 npm run dev:frontend         # Next.js dev server on :3000
 npm run dev:backend          # Django runserver on :8000
 ```
@@ -95,15 +94,53 @@ npm run celery:worker        # Start Celery task worker
 npm run celery:beat          # Start Celery beat scheduler
 ```
 
-### Deploy Script
+### Setup & Cleanup
 
 ```bash
-./deploy.sh                  # Start (auto-detects mode from .env DEPLOYMENT_MODE)
-./deploy.sh init             # Initialize DB and create owner accounts
-./deploy.sh logs [service]   # View logs (backend, frontend, postgres)
-./deploy.sh backup           # Manual database backup
-./deploy.sh restore TIMESTAMP
+npm run install:all          # Install npm deps (root + frontend) + pip deps
+npm run clean                # Remove .next, node_modules, __pycache__, .pyc files
+npm run spell-check          # Check spelling across TS/JS/Python/MD files
 ```
+
+### Deploy scripts
+
+Two scripts — nothing else needed:
+
+```bash
+# First time on any machine:
+./deploy-first-time.sh               # Google Drive setup + DB restore + start + schedule backup
+./deploy-first-time.sh gdrive-setup  # Re-link Google Drive only (on a new machine)
+./deploy-first-time.sh --fresh       # Start with empty DB (brand new shop, no restore)
+
+# Daily use:
+./deploy.sh up                # Start app (reads DEPLOYMENT_MODE from .env)
+./deploy.sh down              # Stop app
+./deploy.sh restart           # Restart all services
+./deploy.sh backup            # Manual backup → Google Drive now
+./deploy.sh logs [service]    # View logs
+./deploy.sh ps                # Check container status
+./deploy.sh migrate           # Run Django migrations
+./deploy.sh init              # Run migrations + seed owner accounts
+```
+
+### Deployment modes
+
+`DEPLOYMENT_MODE` in `.env` controls everything — deploy.sh reads it and picks the right compose file:
+
+| Value | Compose file | Use case |
+|-------|-------------|----------|
+| `development` | `docker-compose-local.yml` | Coding on your laptop, hot reload |
+| `tunnel` | `docker-compose-trycloudflare.yml` | Shop PC with free public URL |
+| `server` | `docker-compose-server.yml` | VPS with domain + auto SSL |
+
+The tunnel URL (trycloudflare.com) is stored in Redis by `deploy.sh` and shown as a banner in `MainLayout.tsx` via `GET /api/v1/dashboard/tunnel-url/`. It updates automatically on each restart.
+
+### Google Drive backups
+
+- Credentials stored in `~/.config/rclone/rclone.conf` after first OAuth sign-in
+- Re-link on a new machine: `./deploy-first-time.sh gdrive-setup`
+- Daily automatic backup at **12:00 noon** (cron set by `deploy-first-time.sh`)
+- Keeps only the **latest** backup locally and on Google Drive (`ExpressAutoBikeBackups/`)
 
 ---
 
@@ -113,7 +150,7 @@ npm run celery:beat          # Start Celery beat scheduler
 
 - **Frontend**: Next.js 15 (App Router) + TypeScript + Tailwind CSS + Radix UI + React Query
 - **Backend**: Django 5.1 + Django REST Framework + PostgreSQL + Redis + Celery
-- **Infrastructure**: Docker Compose (3 modes: development, tunnel, production)
+- **Infrastructure**: Docker Compose (4 files: base + 3 mode overrides)
 
 ### Backend Apps
 
@@ -124,7 +161,7 @@ npm run celery:beat          # Start Celery beat scheduler
 - `notifications/` — In-app + email notifications; Celery async tasks in `tasks.py`
 - `reports/` — PDF/Excel/CSV export generation (ReportLab, openpyxl)
 - `dashboard/` — KPI aggregations, analytics endpoints, business settings (Redis-backed)
-- `express_auto_bike/` — Django project config; `settings.py` for production, `settings_hybrid.py` for hybrid mode
+- `express_auto_bike/` — Django project config (`settings.py`, `celery.py`)
 
 **API base path**: `/api/v1/`
 **API docs**: `/api/schema/swagger-ui/` and `/api/schema/redoc/`
@@ -139,7 +176,7 @@ frontend/
 │   ├── barcode/            # BarcodeScanner component
 │   ├── dashboard/          # StatsCards, ActivityFeed
 │   ├── inventory/          # InventoryTable, InventoryForm
-│   ├── layout/             # Sidebar, Header, NetworkStatus
+│   ├── layout/             # MainLayout, TunnelBanner, NetworkStatus
 │   ├── notifications/      # NotificationList
 │   ├── orders/             # OrderTable, OrderForm
 │   ├── reports/            # SalesReport, InventoryReport, etc.
@@ -506,7 +543,7 @@ Role hierarchy (highest to lowest): `OWNER > OPERATIONS > CASHIER > DELIVERY > C
 
 Celery app: `express_auto_bike/celery.py` (instance name `express_auto_bike`). Auto-loaded via `express_auto_bike/__init__.py` which imports `celery_app`. Auto-discovers tasks in installed apps.
 
-Run worker and beat together — `celery-beat` is required for the scheduled tasks below to fire. Both services are wired in `docker-compose.yml`, `docker-compose.prod.yml`, and `docker-compose.tunnel.yml`.
+Run worker and beat together — `celery-beat` is required for the scheduled tasks below to fire. Both services are defined in `docker-compose.yml` (base) and inherited by all mode files.
 
 Tasks defined in `notifications/tasks.py`:
 
@@ -576,53 +613,53 @@ Redis serves two roles:
 
 ## Configuration
 
-Single `.env` file at project root controls all services. Key variables:
+Single `.env` file at project root. Copy `.env.example` → `.env` to get started.
+
+Key variables by group:
 
 ```bash
-DEPLOYMENT_MODE=development|tunnel|production
-NEXT_PUBLIC_API_URL=http://localhost:8000
+# Mode — controls which docker-compose file deploy.sh uses
+DEPLOYMENT_MODE=development   # development | tunnel | server
+
+# Required for all modes
+SECRET_KEY=<50-char random string>
+POSTGRES_PASSWORD=<strong password in tunnel/server>
 DATABASE_URL=postgresql://postgres:postgres@postgres:5432/express_auto_bike
 REDIS_URL=redis://redis:6379/0
-SECRET_KEY=<50-char string>
-DEBUG=1
-POSTGRES_PORT=5433          # avoids conflict with local postgres on 5432
 
-# Google OAuth (required for /login Google button)
-GOOGLE_OAUTH_CLIENT_ID=<from Google Cloud Console>
-GOOGLE_OAUTH_CLIENT_SECRET=<from Google Cloud Console>
+# Server mode only
+FRONTEND_DOMAIN=yourdomain.com
+BACKEND_DOMAIN=api.yourdomain.com
+ACME_EMAIL=you@gmail.com      # Let's Encrypt SSL cert alerts
 
-# Email notifications (defaults to console backend if omitted)
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.sendgrid.net
-EMAIL_PORT=587
-EMAIL_USE_TLS=True
-EMAIL_HOST_USER=apikey
-EMAIL_HOST_PASSWORD=<SMTP API key>
+# Google OAuth (optional — leave empty to use email/password login only)
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+
+# Email notifications (optional — leave empty to disable)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_HOST_USER=
+EMAIL_HOST_PASSWORD=          # Use a Gmail App Password, not your account password
 ```
-
-Copy `.env.example` to `.env` to get started.
 
 ---
 
 ## Docker Compose Files
 
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` | Base: postgres, redis, backend, frontend, **celery-worker**, **celery-beat** |
-| `docker-compose.override.yml` | Local dev overrides (auto-loaded with base) |
-| `docker-compose.prod.yml` | Production: Traefik SSL, custom domains, celery-worker, celery-beat |
-| `docker-compose.tunnel.yml` | Cloudflare Tunnel for free public access; includes celery-worker and celery-beat |
+| File | Mode (`DEPLOYMENT_MODE=`) | Purpose |
+|------|--------------------------|---------|
+| `docker-compose.yml` | *(base — always included)* | postgres, redis, celery-worker, celery-beat |
+| `docker-compose-local.yml` | `development` | Django runserver + Next.js dev server, hot reload |
+| `docker-compose-trycloudflare.yml` | `tunnel` | gunicorn + prod Next.js + trycloudflare.com tunnel |
+| `docker-compose-server.yml` | `server` | gunicorn + prod Next.js + Traefik SSL (Let's Encrypt) |
 
-NPM script shortcuts (defined in root `package.json`):
+Always use `./deploy.sh` rather than docker-compose directly — it handles CORS env updates and stores the tunnel URL in Redis for the in-app banner.
 
-| Script | Equivalent |
-|---|---|
-| `npm run docker:dev` | `docker-compose up -d` |
-| `npm run docker:prod` | `docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d` |
-| `npm run docker:tunnel` | `docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d` |
-| `npm run docker:hybrid` | `docker-compose up -d postgres redis backend` (frontend runs locally) |
-| `npm run docker:down` | `docker-compose down` |
-| `npm run docker:logs` | `docker-compose logs -f` |
+### Moving to a VPS (server mode)
+1. Point your domain A record to the server IP
+2. Open ports 80 and 443 in the server firewall
+3. Set in `.env`: `DEPLOYMENT_MODE=server`, `FRONTEND_DOMAIN`, `BACKEND_DOMAIN`, `ACME_EMAIL`, strong `SECRET_KEY` and `POSTGRES_PASSWORD`
+4. Run `./deploy-first-time.sh` — restores DB from Google Drive backup and starts with SSL auto-provisioned
 
 ---
 

@@ -13,7 +13,7 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Security settings
-SECRET_KEY = config('SECRET_KEY', default="django-insecure-#j)m*#&c1w4p!q4!48o*lud#wm@ln+#9z1_9*3#9mzu#e64_r0")
+SECRET_KEY = config('SECRET_KEY')  # Required — no default. Generate with: python -c "import secrets; print(secrets.token_urlsafe(50))"
 # Dedicated JWT signing key — kept separate from Django's SECRET_KEY so a rotation of one doesn't
 # invalidate the other. Falls back to SECRET_KEY only when the env var is not set.
 JWT_SECRET_KEY = config('JWT_SECRET_KEY', default=SECRET_KEY)
@@ -172,7 +172,19 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'authentication.exceptions.custom_exception_handler',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '30/min',
+        'user': '200/min',
+        'auth': '10/min',   # stricter rate for auth endpoints
+    },
 }
+
+# Custom throttle scope for auth endpoints (used in authentication/views.py)
+# Views can use: throttle_scope = 'auth'
 
 # OAuth2 Settings
 OAUTH2_PROVIDER = {
@@ -268,7 +280,7 @@ SOCIALACCOUNT_PROVIDERS = {
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = False
 ACCOUNT_AUTHENTICATION_METHOD = 'email'
-ACCOUNT_EMAIL_VERIFICATION = 'none'  # Disable email verification for now
+ACCOUNT_EMAIL_VERIFICATION = 'optional'
 SOCIALACCOUNT_AUTO_SIGNUP = True
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
@@ -353,6 +365,10 @@ LOGGING = {
 
 # Create logs directory if it doesn't exist
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+
+X_FRAME_OPTIONS = 'DENY'
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
 
 # Security Settings for Production
 if not DEBUG:

@@ -549,24 +549,28 @@ class CreateReturnFromOrderView(APIView):
     
     def get(self, request, order_id):
         """Get order information for return creation."""
-        order = get_object_or_404(CustomerOrder, pk=order_id)
-        
+        order = get_object_or_404(
+            CustomerOrder.objects.prefetch_related('items__item'),
+            pk=order_id
+        )
+
         if order.status not in ['DELIVERED', 'COMPLETED']:
             return Response(
                 {'error': 'Only delivered orders can be returned'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+        # Pre-fetch all returned quantities for this order's items in one query
+        returned_qs = ReturnItem.objects.filter(
+            order_item__order=order,
+            return_obj__status__in=['APPROVED', 'PROCESSED']
+        ).values('order_item_id').annotate(total_returned=Sum('quantity'))
+        returned_qty_map = {r['order_item_id']: r['total_returned'] for r in returned_qs}
+
         # Get order items that can be returned
         returnable_items = []
         for item in order.items.all():
-            # Check if item has already been returned
-            returned_quantity = sum(
-                ri.quantity for ri in ReturnItem.objects.filter(
-                    order_item=item,
-                    return_obj__status__in=['APPROVED', 'PROCESSED']
-                )
-            )
+            returned_quantity = returned_qty_map.get(item.id, 0)
             
             remaining_quantity = item.quantity - returned_quantity
             

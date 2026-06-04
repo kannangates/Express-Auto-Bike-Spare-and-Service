@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { ProtectedRoute } from '../../components/auth/ProtectedRoute'
 import { MainLayout } from '../../components/layout/MainLayout'
 import { useAlert } from '../../components/ui/Alert'
@@ -170,7 +170,7 @@ function UsersContent() {
     }
   }
 
-  const filteredUsers = users.filter(user => {
+  const filteredUsers = useMemo(() => users.filter(user => {
     if (filter === 'pending' && user.is_approved) return false
     if (filter === 'approved' && !user.is_approved) return false
     if (searchQuery) {
@@ -181,7 +181,7 @@ function UsersContent() {
         user.role.toLowerCase().includes(q)
     }
     return true
-  })
+  }), [users, filter, searchQuery])
 
   const pendingCount = users.filter(u => !u.is_approved).length
   const approvedCount = users.filter(u => u.is_approved).length

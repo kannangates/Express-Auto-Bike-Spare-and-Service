@@ -118,6 +118,7 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
         """Get items with low stock levels (cached 30s — staleness acceptable)."""
         from django.core.cache import cache
         cache_key = 'inventory:low_stock_alert'
+        # Note: this cache is invalidated in InventoryItem.update_stock()
         data = cache.get(cache_key)
         if data is None:
             items = self.get_queryset().filter(stock_quantity__lte=F('min_stock_level'))

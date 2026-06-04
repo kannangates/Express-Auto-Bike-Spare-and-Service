@@ -13,4 +13,5 @@ urlpatterns = [
     path('stats/', views.DashboardStatsView.as_view(), name='dashboard_stats'),
     path('activity/', views.DashboardRecentActivityView.as_view(), name='dashboard_activity'),
     path('settings/', views.BusinessSettingsView.as_view(), name='business_settings'),
+    path('tunnel-url/', views.TunnelUrlView.as_view(), name='tunnel_url'),
 ]

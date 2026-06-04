@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { dashboardApi } from '../../utils/api'
 
 interface Activity {
@@ -41,14 +41,25 @@ export function RecentActivity({
     }
   }, [limit, hours])
 
+  // Keep a stable ref so the interval callback never becomes stale
+  const loadActivitiesRef = useRef(loadActivities)
+  useEffect(() => {
+    loadActivitiesRef.current = loadActivities
+  }, [loadActivities])
+
+  // Fetch when params change
   useEffect(() => {
     loadActivities()
+  }, [limit, hours]) // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Set up auto-refresh
-    const interval = setInterval(loadActivities, refreshInterval)
-
-    return () => clearInterval(interval)
-  }, [loadActivities, refreshInterval])
+  // Recurring interval — only restarts when refreshInterval itself changes
+  useEffect(() => {
+    if (!refreshInterval) return
+    const id = setInterval(() => {
+      loadActivitiesRef.current()
+    }, refreshInterval)
+    return () => clearInterval(id)
+  }, [refreshInterval])
 
   const getActivityIcon = (type: string) => {
     switch (type) {

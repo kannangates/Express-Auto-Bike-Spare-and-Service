@@ -270,14 +270,17 @@ class CancelOrderView(APIView):
     @transaction.atomic
     def post(self, request, pk):
         """Cancel order and restore inventory if needed."""
-        order = get_object_or_404(CustomerOrder, pk=pk)
-        
+        order = get_object_or_404(
+            CustomerOrder.objects.prefetch_related('items__item'),
+            pk=pk
+        )
+
         if not order.can_be_cancelled():
             return Response(
                 {'error': 'Order cannot be cancelled in current status'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # If order was processed, restore inventory
         if order.status == 'CONFIRMED':
             for order_item in order.items.all():
@@ -342,23 +345,25 @@ class PaymentProcessingView(APIView):
             auto_apply_credit = serializer.validated_data.get('auto_apply_credit', True)
             
             # Automatically apply available credit if requested and customer exists
+            credit_account = None
             if auto_apply_credit and order.customer:
                 try:
-                    credit_account = order.customer.credit_account
+                    from returns.models import CustomerCredit
+                    credit_account = CustomerCredit.objects.select_for_update().get(customer=order.customer)
                     available_credit = credit_account.balance
-                    
+
                     # Calculate how much credit to use
                     remaining_amount = order.total_amount - amount_paid
                     if remaining_amount > 0 and available_credit > 0:
                         credit_to_use = min(remaining_amount, available_credit)
                         credit_used = credit_to_use
-                        
+
                 except Exception:
                     # Customer has no credit account or other error
                     available_credit = Decimal('0.00')
-            
+
             total_payment = amount_paid + credit_used
-            
+
             # Validate payment amount
             if total_payment < order.total_amount:
                 return Response(
@@ -372,11 +377,13 @@ class PaymentProcessingView(APIView):
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
             # Process store credit if used
             if credit_used > 0 and order.customer:
                 try:
-                    credit_account = order.customer.credit_account
+                    if credit_account is None:
+                        from returns.models import CustomerCredit
+                        credit_account = CustomerCredit.objects.select_for_update().get(customer=order.customer)
                     credit_account.use_credit(
                         amount=credit_used,
                         reference_type='ORDER',
@@ -661,13 +668,31 @@ class QuickOrderCreateView(APIView):
                 total_amount=Decimal('0.00')
             )
             
-            # Add items
+            # Collect barcodes and quantities upfront
+            barcode_qty_map = {
+                item_data.get('barcode'): item_data.get('quantity', 1)
+                for item_data in items_data
+            }
+            barcodes = list(barcode_qty_map.keys())
+
+            # Lock inventory rows before stock check to prevent overselling
+            locked_items = {
+                inv_item.barcode: inv_item
+                for inv_item in InventoryItem.objects.select_for_update().filter(
+                    barcode__in=barcodes, is_active=True
+                ).order_by('id')  # deterministic order prevents deadlock under concurrent requests
+            }
+
+            if len(locked_items) != len(barcodes):
+                raise InventoryItem.DoesNotExist
+
+            # Check stock and add items
             for item_data in items_data:
                 barcode = item_data.get('barcode')
                 quantity = item_data.get('quantity', 1)
-                
-                item = InventoryItem.objects.get(barcode=barcode, is_active=True)
-                
+
+                item = locked_items[barcode]
+
                 if not item.can_fulfill_quantity(quantity):
                     raise ValueError(f'Insufficient stock for {item.name}')
                 
@@ -677,7 +702,7 @@ class QuickOrderCreateView(APIView):
                     quantity=quantity,
                     unit_price=item.unit_price
                 )
-            
+
             # Calculate totals and confirm order
             order.calculate_totals()
             order.status = 'CONFIRMED'

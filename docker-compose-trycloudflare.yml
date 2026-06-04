@@ -1,0 +1,75 @@
+# Shop/public mode — gunicorn + production Next.js build + trycloudflare.com tunnel.
+# Run: docker-compose -f docker-compose.yml -f docker-compose-trycloudflare.yml up -d
+#
+# The tunnel URL is printed in the logs and stored in Redis so the in-app banner can show it.
+# Check URL: docker-compose logs cloudflared | grep trycloudflare
+
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: express-auto-backend
+    env_file:
+      - .env
+    environment:
+      - DEBUG=0
+      - ALLOWED_HOSTS=${TUNNEL_BACKEND_URL:-localhost},localhost,127.0.0.1,backend
+      - CORS_ALLOWED_ORIGINS=${TUNNEL_FRONTEND_URL:-http://localhost:3000},http://localhost:3000
+      - SECURE_SSL_REDIRECT=0
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - backend_media:/app/media
+      - backend_static:/app/staticfiles
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - express-auto-network
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn express_auto_bike.wsgi:application
+               --bind 0.0.0.0:8000
+               --workers 3"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: express-auto-frontend
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${TUNNEL_BACKEND_URL:-http://localhost:8000}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    networks:
+      - express-auto-network
+    restart: unless-stopped
+    command: npm start
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: express-auto-cloudflared
+    command: tunnel --no-autoupdate --url http://frontend:3000
+    depends_on:
+      - frontend
+    networks:
+      - express-auto-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

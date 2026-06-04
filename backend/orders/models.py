@@ -201,16 +201,21 @@ class CustomerOrder(models.Model):
     
     def calculate_totals(self):
         """Calculate order totals from items, tax, and discounts."""
+        from django.db.models import Sum
         # Only calculate from items if the order has been saved and has items
-        if self.pk and self.items.exists():
-            self.subtotal = sum(item.total_price for item in self.items.all())
-        # Otherwise, keep the provided subtotal or default to 0
+        if self.pk:
+            result = self.items.aggregate(subtotal=Sum('total_price'))
+            agg_subtotal = result['subtotal']
+            if agg_subtotal is not None:
+                self.subtotal = agg_subtotal
+            elif not hasattr(self, 'subtotal') or self.subtotal is None:
+                self.subtotal = Decimal('0.00')
         elif not hasattr(self, 'subtotal') or self.subtotal is None:
             self.subtotal = Decimal('0.00')
-        
+
         # Calculate tax amount
         self.tax_amount = self.subtotal * self.tax_rate
-        
+
         # Calculate total amount — clamp to zero so discounts never produce a negative bill
         self.total_amount = max(Decimal('0.00'), self.subtotal + self.tax_amount - self.discount_amount)
     
@@ -220,7 +225,8 @@ class CustomerOrder(models.Model):
     
     def get_total_quantity(self):
         """Return total quantity of all items in the order."""
-        return sum(item.quantity for item in self.items.all())
+        from django.db.models import Sum
+        return self.items.aggregate(total=Sum('quantity'))['total'] or 0
     
     def can_be_cancelled(self):
         """Check if order can be cancelled."""

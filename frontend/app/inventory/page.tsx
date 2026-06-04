@@ -154,6 +154,7 @@ const InventoryPage: React.FC = () => {
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [categoryError, setCategoryError] = useState(false)
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 4000)
@@ -178,7 +179,7 @@ const InventoryPage: React.FC = () => {
     inventoryApi.categories().then((data: unknown) => {
       const list = Array.isArray(data) ? data : (data as { results?: Category[] }).results ?? []
       setCategories(list)
-    }).catch(() => { showToast('Failed to load categories', 'error') })
+    }).catch(() => { showToast('Failed to load categories', 'error'); setCategoryError(true) })
   }, [])
 
   useEffect(() => {
@@ -235,11 +236,16 @@ const InventoryPage: React.FC = () => {
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9 pr-3 py-2 w-full border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
             </div>
-            <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[160px]">
-              <option value="">All Categories</option>
-              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <div className="flex flex-col">
+              <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[160px]">
+                <option value="">All Categories</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              {categoryError && (
+                <p className="text-xs text-red-500 mt-1">Failed to load categories. Refresh to retry.</p>
+              )}
+            </div>
             <button onClick={() => { setEditItem(null); setIsModalOpen(true) }}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 whitespace-nowrap">
               <Plus className="w-4 h-4" /> Add New Item

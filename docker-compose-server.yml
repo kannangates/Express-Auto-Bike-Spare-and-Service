@@ -1,10 +1,17 @@
-# Production Override
-# Use: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Server/VPS mode — Traefik reverse proxy with automatic SSL via Let's Encrypt.
+# Run: docker-compose -f docker-compose.yml -f docker-compose-server.yml up -d
+#
+# Prerequisites on the server:
+#   1. A domain pointed to your server IP (A record in your DNS provider)
+#   2. Ports 80 and 443 open in the server firewall
+#   3. .env has FRONTEND_DOMAIN, BACKEND_DOMAIN, ACME_EMAIL set
+#
+# First time on a new server:
+#   ./deploy-first-time.sh
 
 version: '3.8'
 
 services:
-  # Traefik Reverse Proxy (SSL, Load Balancing)
   traefik:
     image: traefik:v2.10
     container_name: express-auto-traefik
@@ -14,6 +21,9 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      # Redirect all HTTP → HTTPS
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
@@ -27,19 +37,6 @@ services:
     networks:
       - express-auto-network
     restart: unless-stopped
-
-  postgres:
-    restart: unless-stopped
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  redis:
-    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
@@ -47,37 +44,69 @@ services:
         max-file: "3"
 
   backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: express-auto-backend
+    env_file:
+      - .env
     environment:
       - DEBUG=0
-      - DJANGO_SETTINGS_MODULE=express_auto_bike.settings
+      - ALLOWED_HOSTS=${BACKEND_DOMAIN},localhost,127.0.0.1,backend
+      - CORS_ALLOWED_ORIGINS=https://${FRONTEND_DOMAIN}
+      - SECURE_SSL_REDIRECT=0          # Traefik handles SSL termination
+      - SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
+      - SECURE_HSTS_SECONDS=31536000
+      - SESSION_COOKIE_SECURE=1
+      - CSRF_COOKIE_SECURE=1
     volumes:
       - backend_media:/app/media
       - backend_static:/app/staticfiles
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - express-auto-network
+    restart: unless-stopped
     command: >
-      sh -c "python manage.py migrate &&
-        python manage.py collectstatic --noinput &&
-        gunicorn express_auto_bike.wsgi:application --bind 0.0.0.0:8000 --workers $(python -c 'import multiprocessing; print(multiprocessing.cpu_count() * 2 + 1)')"
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn express_auto_bike.wsgi:application
+               --bind 0.0.0.0:8000
+               --workers 4
+               --timeout 120
+               --access-logfile -"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`${BACKEND_DOMAIN}`)"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
-    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
-        max-file: "3"
+        max-file: "5"
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+    container_name: express-auto-frontend
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=https://${BACKEND_DOMAIN}
     volumes:
       - frontend_cache:/app/.next/cache
+    depends_on:
+      - backend
+    networks:
+      - express-auto-network
+    restart: unless-stopped
     command: npm start
     labels:
       - "traefik.enable=true"
@@ -85,53 +114,25 @@ services:
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
-    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
-        max-file: "3"
+        max-file: "5"
 
-  # Celery Worker (production)
   celery-worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: express-auto-celery-worker
-    env_file:
-      - .env
     environment:
       - DEBUG=0
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - express-auto-network
     command: celery -A express_auto_bike worker -l info --concurrency=4
-    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  # Celery Beat (production)
   celery-beat:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: express-auto-celery-beat
-    env_file:
-      - .env
     environment:
       - DEBUG=0
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - express-auto-network
-    command: celery -A express_auto_bike beat -l info
-    restart: unless-stopped
     logging:
       driver: "json-file"
       options:

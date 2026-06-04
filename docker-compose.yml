@@ -1,11 +1,11 @@
-# Base Docker Compose Configuration
-# Use: docker-compose up -d (development)
-# Use: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d (production)
+# Base — shared services used by all modes.
+# Never run this file directly. Use:
+#   Local dev  : docker-compose -f docker-compose.yml -f docker-compose-local.yml up -d
+#   Public/shop: docker-compose -f docker-compose.yml -f docker-compose-trycloudflare.yml up -d
 
 version: '3.8'
 
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
     container_name: express-auto-postgres
@@ -17,17 +17,15 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Schema is managed by Django migrations, not SQL file
-    # - ./backend/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     networks:
       - express-auto-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Redis Cache
   redis:
     image: redis:7-alpine
     container_name: express-auto-redis
@@ -37,39 +35,13 @@ services:
       - redis_data:/data
     networks:
       - express-auto-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Django Backend
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: express-auto-backend
-    env_file:
-      - .env
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
-    volumes:
-      - ./backend:/app
-      - backend_media:/app/media
-      - backend_static:/app/staticfiles
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - express-auto-network
-    command: >
-      sh -c "python manage.py migrate --noinput &&
-        python manage.py collectstatic --noinput &&
-        python manage.py runserver 0.0.0.0:8000"
-
-  # Celery Worker
   celery-worker:
     build:
       context: ./backend
@@ -77,6 +49,8 @@ services:
     container_name: express-auto-celery-worker
     env_file:
       - .env
+    environment:
+      - DEBUG=0
     volumes:
       - ./backend:/app
     depends_on:
@@ -84,13 +58,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      backend:
-        condition: service_started
     networks:
       - express-auto-network
+    restart: unless-stopped
     command: celery -A express_auto_bike worker -l info
 
-  # Celery Beat Scheduler
   celery-beat:
     build:
       context: ./backend
@@ -98,6 +70,8 @@ services:
     container_name: express-auto-celery-beat
     env_file:
       - .env
+    environment:
+      - DEBUG=0
     volumes:
       - ./backend:/app
     depends_on:
@@ -105,31 +79,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      backend:
-        condition: service_started
     networks:
       - express-auto-network
+    restart: unless-stopped
     command: celery -A express_auto_bike beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
-
-  # Next.js Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: express-auto-frontend
-    env_file:
-      - .env
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    depends_on:
-      - backend
-    networks:
-      - express-auto-network
-    command: npm run dev
 
 volumes:
   postgres_data:

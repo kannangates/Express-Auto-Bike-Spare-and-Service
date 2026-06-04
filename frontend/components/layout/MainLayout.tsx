@@ -9,6 +9,7 @@ import {
   LayoutDashboard, Package, ClipboardList, RotateCcw,
   ScanBarcode, BarChart3, Users, Settings, ExternalLink, Menu, Zap, Cog,
 } from 'lucide-react'
+import { TunnelBanner } from './TunnelBanner'
 
 export interface MainLayoutProps {
   children: React.ReactNode
@@ -106,6 +107,9 @@ export function MainLayout({ children, title, subtitle }: MainLayoutProps) {
 
       {/* Main content */}
       <div className="flex flex-col lg:ml-64 min-h-screen">
+        {/* Tunnel URL banner — only visible when trycloudflare.com tunnel is active */}
+        <TunnelBanner />
+
         {/* Top bar */}
         <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">

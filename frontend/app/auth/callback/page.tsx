@@ -14,9 +14,30 @@ function AuthCallbackContent() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Check if we received tokens directly (from approved user)
-        const accessToken = searchParams.get('access_token')
-        const refreshToken = searchParams.get('refresh_token')
+        // Check if we received tokens directly (from approved user).
+        // Tokens may arrive in the URL fragment (#access&refresh) — preferred because
+        // fragments are not sent to servers and don't appear in access logs or Referer
+        // headers. Fall back to query params for backward compatibility.
+        let accessToken: string | null = null
+        let refreshToken: string | null = null
+
+        const hash = window.location.hash.slice(1) // strip leading '#'
+        if (hash) {
+          // Backend sends #access_token=TOKEN&refresh_token=TOKEN — parse with URLSearchParams
+          const hashParams = new URLSearchParams(hash)
+          accessToken = hashParams.get('access_token')
+          refreshToken = hashParams.get('refresh_token')
+        }
+
+        if (!accessToken || !refreshToken) {
+          accessToken = searchParams.get('access_token')
+          refreshToken = searchParams.get('refresh_token')
+        }
+
+        // Clear tokens from URL so they don't linger in browser history
+        if (accessToken && refreshToken) {
+          history.replaceState({}, '', window.location.pathname)
+        }
 
         if (accessToken && refreshToken) {
           // Clear any existing tokens first
@@ -26,12 +47,6 @@ function AuthCallbackContent() {
           // Store new tokens using consistent cookie settings
           document.cookie = `auth-token=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax`
           document.cookie = `refresh-token=${refreshToken}; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax`
-
-          // Debug: verify token was set and decode it
-          console.log('Token set in callback:', {
-            tokenLength: accessToken.length,
-            cookieSet: document.cookie.includes('auth-token=')
-          })
 
           setStatus('success')
           setMessage('Authentication successful! Redirecting...')

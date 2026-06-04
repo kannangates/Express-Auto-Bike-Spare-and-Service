@@ -42,6 +42,10 @@ function getUserRoleFromToken(token: string): string | null {
     const parts = token.split('.');
     if (parts.length !== 3 || !parts[1]) return null;
 
+    // NOTE: The edge middleware cannot verify the JWT signature (secret not available at edge).
+    // This decode is used ONLY for routing decisions (role-based redirects).
+    // All API requests are re-verified by the Django backend with full signature validation.
+    // Do not use middleware-decoded claims for security-critical decisions in components.
     const payload = JSON.parse(atob(parts[1]));
 
     // Reject expired tokens — signature is verified at the API level

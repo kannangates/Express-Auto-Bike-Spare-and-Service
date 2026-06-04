@@ -6,7 +6,8 @@ Implements Requirements 9.6: Dashboard analytics with key performance indicators
 
 from datetime import datetime, timedelta
 from django.utils import timezone
-from django.db.models import Count, Sum, Avg, Q, F
+from django.db.models import Count, Sum, Avg, Q, F, DecimalField
+from django.db.models.functions import Coalesce
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -98,31 +99,23 @@ class DashboardStatsView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     def _get_inventory_stats(self):
         """Get inventory-related KPIs."""
-        total_items = InventoryItem.objects.filter(is_active=True).count()
-        total_stock_value = InventoryItem.objects.filter(is_active=True).aggregate(
-            total_value=Sum(F('stock_quantity') * F('unit_price'))
-        )['total_value'] or 0
-        
-        low_stock_items = InventoryItem.objects.filter(
-            is_active=True,
-            stock_quantity__lte=F('min_stock_level')
-        ).count()
-        
-        out_of_stock_items = InventoryItem.objects.filter(
-            is_active=True,
-            stock_quantity=0
-        ).count()
-        
-        avg_stock_level = InventoryItem.objects.filter(is_active=True).aggregate(
-            avg_stock=Avg('stock_quantity')
-        )['avg_stock'] or 0
-        
+        inventory_stats = InventoryItem.objects.filter(is_active=True).aggregate(
+            total_items=Count('id'),
+            total_stock_value=Coalesce(Sum(F('stock_quantity') * F('unit_price'), output_field=DecimalField()), 0),
+            low_stock_count=Count('id', filter=Q(stock_quantity__lte=F('min_stock_level'))),
+            out_of_stock_count=Count('id', filter=Q(stock_quantity=0)),
+            avg_stock_level=Coalesce(Avg('stock_quantity'), 0),
+        )
+
+        total_items = inventory_stats['total_items']
+        low_stock_items = inventory_stats['low_stock_count']
+
         return {
             'total_items': total_items,
-            'total_stock_value': float(total_stock_value),
+            'total_stock_value': float(inventory_stats['total_stock_value']),
             'low_stock_items': low_stock_items,
-            'out_of_stock_items': out_of_stock_items,
-            'avg_stock_level': float(avg_stock_level),
+            'out_of_stock_items': inventory_stats['out_of_stock_count'],
+            'avg_stock_level': float(inventory_stats['avg_stock_level']),
             'stock_health_percentage': round(
                 ((total_items - low_stock_items) / total_items * 100) if total_items > 0 else 0, 2
             )
@@ -131,7 +124,7 @@ class DashboardStatsView(APIView):
     def _get_sales_stats(self, start_date, end_date):
         """Get sales-related KPIs for the specified period."""
         completed_orders = CustomerOrder.objects.filter(
-            status='COMPLETED',
+            status='DELIVERED',
             created_at__range=[start_date, end_date]
         )
         
@@ -148,13 +141,13 @@ class DashboardStatsView(APIView):
         # Today's sales
         today = timezone.now().date()
         todays_sales = CustomerOrder.objects.filter(
-            status='COMPLETED',
+            status='DELIVERED',
             created_at__date=today
         ).aggregate(total=Sum('total_amount'))['total'] or 0
         
         # Top selling items
         top_items = OrderItem.objects.filter(
-            order__status='COMPLETED',
+            order__status='DELIVERED',
             order__created_at__range=[start_date, end_date]
         ).values('item__name', 'item__barcode').annotate(
             total_quantity=Sum('quantity'),
@@ -180,12 +173,16 @@ class DashboardStatsView(APIView):
         )
         status_distribution = {item['status']: item['count'] for item in order_status_counts}
         
-        pending_orders = CustomerOrder.objects.filter(status='PENDING').count()
-        processing_orders = CustomerOrder.objects.filter(status='CONFIRMED').count()
+        order_counts = CustomerOrder.objects.aggregate(
+            pending=Count('id', filter=Q(status='PENDING')),
+            processing=Count('id', filter=Q(status__in=['CONFIRMED', 'SHIPPED'])),
+        )
+        pending_orders = order_counts['pending']
+        processing_orders = order_counts['processing']
         
         # Order fulfillment rate
         total_orders = orders_in_period.count()
-        completed_orders = orders_in_period.filter(status='COMPLETED').count()
+        completed_orders = orders_in_period.filter(status='DELIVERED').count()
         fulfillment_rate = (completed_orders / total_orders * 100) if total_orders > 0 else 0
         
         return {
@@ -211,7 +208,7 @@ class DashboardStatsView(APIView):
         
         # Return rate calculation
         orders_in_period = CustomerOrder.objects.filter(
-            status='COMPLETED',
+            status='DELIVERED',
             created_at__range=[start_date, end_date]
         ).count()
         return_rate = (total_returns / orders_in_period * 100) if orders_in_period > 0 else 0
@@ -247,7 +244,7 @@ class DashboardStatsView(APIView):
         
         # Customer lifetime value (simplified)
         customer_values = CustomerOrder.objects.filter(
-            status='COMPLETED',
+            status='DELIVERED',
             customer__role='CUSTOMER'
         ).values('customer').annotate(
             total_spent=Sum('total_amount'),
@@ -414,3 +411,14 @@ class BusinessSettingsView(APIView):
         existing.update(request.data)
         cache.set('business_settings', existing, timeout=None)
         return Response(existing, status=status.HTTP_200_OK)
+
+
+class TunnelUrlView(APIView):
+    """Return the active trycloudflare.com tunnel URL stored in Redis by deploy.sh."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.core.cache import cache
+        url = cache.get('tunnel_url', '')
+        return Response({'url': url}, status=status.HTTP_200_OK)

@@ -51,6 +51,8 @@ class AdminUserApprovalView(APIView):
             page = int(request.GET.get('page', 1))
             page_size = int(request.GET.get('page_size', 10))
             search = request.GET.get('search', '').strip()
+            if len(search) > 100:
+                search = search[:100]  # Silently truncate — prevents LIKE query abuse
             role_filter = request.GET.get('role', '').strip()
             sort_by = request.GET.get('sort_by', '-date_joined')
             
@@ -292,7 +294,9 @@ class AdminUserProfileManagementView(APIView):
                 page = int(request.GET.get('page', 1))
                 page_size = int(request.GET.get('page_size', 20))
                 search = request.GET.get('search', '').strip()
-                
+                if len(search) > 100:
+                    search = search[:100]  # Silently truncate — prevents LIKE query abuse
+
                 queryset = CustomUser.objects.select_related('profile')
                 
                 if search:

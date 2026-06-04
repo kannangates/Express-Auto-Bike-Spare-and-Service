@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Package, ClipboardList, BarChart3, Zap, MessageCircle } from 'lucide-react'
+import { api } from '../utils/api'
 
 interface Product {
   id: number
@@ -84,22 +85,19 @@ export default function HomePage() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const res = await fetch(`/api/v1/inventory/items/?page_size=24&is_active=true`)
-        if (res.ok) {
-          const data = await res.json()
-          const items = Array.isArray(data) ? data : (data.results ?? [])
-          setProducts(items.map((item: Record<string, unknown>) => ({
-            id: item.id as number,
-            name: item.name as string,
-            sku: item.sku as string,
-            barcode: item.barcode as string | undefined,
-            description: item.description as string | undefined,
-            category: (item.category as Record<string, unknown>)?.name as string | undefined ?? item.category as string | undefined,
-            quantity: (item.stock_quantity ?? item.quantity ?? 0) as number,
-            price: (item.unit_price ?? item.price ?? 0) as number,
-            image: item.image as string | undefined,
-          })))
-        }
+        const data = await api.get('/api/v1/inventory/items/', { page_size: '24', is_active: 'true' })
+        const items = Array.isArray(data) ? data : (data.results ?? [])
+        setProducts(items.map((item: Record<string, unknown>) => ({
+          id: item.id as number,
+          name: item.name as string,
+          sku: item.sku as string,
+          barcode: item.barcode as string | undefined,
+          description: item.description as string | undefined,
+          category: (item.category as Record<string, unknown>)?.name as string | undefined ?? item.category as string | undefined,
+          quantity: (item.stock_quantity ?? item.quantity ?? 0) as number,
+          price: (item.unit_price ?? item.price ?? 0) as number,
+          image: item.image as string | undefined,
+        })))
       } catch {
         // silently fail - products section just won't show
       } finally {

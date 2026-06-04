@@ -1,6 +1,10 @@
+import logging
+
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 class Notification(models.Model):
@@ -158,7 +162,8 @@ class Notification(models.Model):
         # Trigger email sending if needed
         if notification.should_send_email():
             from .tasks import send_notification_email
-            send_notification_email.delay(notification.id)
+            task = send_notification_email.delay(notification.id)
+            logger.info(f"Notification email queued: notification_id={notification.id} task_id={task.id}")
         
         return notification
     

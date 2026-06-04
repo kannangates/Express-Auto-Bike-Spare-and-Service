@@ -223,7 +223,9 @@ class CustomerReturn(models.Model):
     
     def calculate_totals(self):
         """Calculate return totals from return items."""
-        self.total_amount = sum(item.total_price for item in self.items.all())
+        from django.db.models import Sum
+        result = self.items.aggregate(total=Sum('total_price'))
+        self.total_amount = result['total'] or Decimal('0.00')
     
     def can_be_approved(self):
         """Check if return can be approved."""
@@ -581,6 +583,11 @@ class CreditTransaction(models.Model):
             models.Index(fields=['transaction_type']),
             models.Index(fields=['reference_type', 'reference_id']),
             models.Index(fields=['created_at']),
+            # Run: npm run makemigrations && npm run migrate
+            models.Index(
+                fields=['customer', 'transaction_type', 'reference_type', 'created_at'],
+                name='credit_txn_customer_type_ref_idx',
+            ),
         ]
         ordering = ['-created_at']
     

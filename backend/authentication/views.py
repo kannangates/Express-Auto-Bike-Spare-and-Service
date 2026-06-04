@@ -25,6 +25,7 @@ from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.throttling import ScopedRateThrottle
 
 import jwt
 from google.auth.transport import requests
@@ -82,11 +83,13 @@ class GoogleOAuthLoginView(APIView):
 class GoogleOAuthCallbackView(APIView):
     """
     Handle Google OAuth callback and user registration/login.
-    
+
     Implements Requirements 1.1, 1.2: Google OAuth integration and user registration
     with default unapproved status.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
     
     def get(self, request):
         """Handle Google OAuth callback with authorization code (GET request from Google)."""
@@ -290,9 +293,10 @@ class GoogleOAuthCallbackView(APIView):
             user.last_login = timezone.now()
             user.save(update_fields=['last_login'])
             
-            # Redirect to frontend with tokens
+            # Tokens in fragment (#) instead of query params — fragments are not sent to servers
+            # and don't appear in access logs, Referer headers, or browser history server-side
             frontend_url = settings.FRONTEND_URL
-            redirect_url = f'{frontend_url}/auth/callback?access_token={access_token}&refresh_token={refresh_token}'
+            redirect_url = f'{frontend_url}/auth/callback#access_token={access_token}&refresh_token={refresh_token}'
             
             # For GET requests (from Google), redirect to frontend
             if request.method == 'GET':
@@ -364,10 +368,12 @@ class GoogleOAuthCallbackView(APIView):
 class UserRegistrationView(APIView):
     """
     Handle user registration (primarily for testing/admin purposes).
-    
+
     Implements Requirement 1.2: User registration with default unapproved status.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
     
     def post(self, request):
         """Register a new user."""
@@ -723,6 +729,8 @@ class RefreshTokenView(APIView):
     Refresh JWT access token using refresh token.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
     
     def post(self, request):
         """Refresh access token."""
@@ -916,6 +924,9 @@ class PendingUserPhoneView(APIView):
                     'error': 'MISSING_FIELDS',
                     'message': 'Both email and phone are required'
                 }, status=status.HTTP_400_BAD_REQUEST)
+
+            if len(email) > 254 or len(phone) > 20:
+                return Response({'error': 'Invalid input'}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
                 user = CustomUser.objects.get(email=email, is_approved=False)

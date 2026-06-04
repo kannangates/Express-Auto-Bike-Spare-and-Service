@@ -56,7 +56,8 @@ export default function SalesReport({ filters }: SalesReportProps) {
 
   useEffect(() => {
     fetchSalesReport();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Use entire filters object so any field added via the index signature also triggers refetch
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   const fetchSalesReport = async () => {
